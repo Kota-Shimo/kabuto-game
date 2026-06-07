@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KabuMushi（カブトムシ株ゲーム）</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;user-select:none;font-family:sans-serif;}
+html,body{width:100%;height:100%;background:#0a180a;overflow:hidden;}
+#wrap{width:100%;height:100vh;display:flex;flex-direction:column;}
+#nav{display:flex;gap:8px;padding:9px 16px;justify-content:center;background:rgba(8,20,8,0.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-shrink:0;border-bottom:0.5px solid rgba(255,255,255,0.06);}
+.nav-btn{padding:7px 22px;border-radius:22px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s;}
+.nav-btn.active{background:linear-gradient(135deg,#6FCF5A,#4DA88A);color:#0a2a1e;box-shadow:0 2px 10px rgba(93,202,165,0.4);}
+.nav-btn:not(.active){background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);}
+.nav-btn:not(.active):hover{background:rgba(255,255,255,0.16);}
+.screen{display:none;flex:1;overflow:hidden;}
+#field-screen.active{display:flex;flex-direction:column;}
+#cage-screen.active{display:block;overflow-y:auto;}
+
+/* ── FIELD ── */
+#field{flex:1;position:relative;overflow:hidden;cursor:none;touch-action:none;}
+#field canvas{position:absolute;inset:0;width:100%;height:100%;}
+canvas#game{pointer-events:none;}
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;z-index:30;pointer-events:none;}
+.hud-box{background:rgba(8,18,8,0.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:0.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:7px 13px;color:#fff;font-size:11px;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,0.25);}
+.hud-box strong{font-size:15px;display:block;font-weight:600;}
+#msg{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(8,18,8,0.8);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:0.5px solid rgba(255,255,255,0.12);color:#fff;font-size:12px;padding:8px 20px;border-radius:22px;pointer-events:none;z-index:40;opacity:0;transition:opacity 0.3s;white-space:nowrap;box-shadow:0 4px 18px rgba(0,0,0,0.3);}
+#legend{position:absolute;bottom:12px;left:12px;background:rgba(8,18,8,0.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:0.5px solid rgba(255,255,255,0.08);border-radius:14px;padding:7px 12px;z-index:30;display:flex;gap:10px;flex-wrap:wrap;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,0.22);}
+.li{display:flex;align-items:center;gap:5px;font-size:10px;color:#cdd;}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px rgba(0,0,0,0.3);}
+#detail-popup{position:absolute;background:rgba(8,18,8,0.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:0.5px solid rgba(143,192,76,0.3);border-radius:14px;padding:14px 16px;z-index:60;display:none;color:#fff;font-size:11px;line-height:1.9;pointer-events:none;min-width:200px;box-shadow:0 8px 28px rgba(0,0,0,0.4);}
+#detail-popup b{font-size:13px;display:block;margin-bottom:5px;color:#aEe89a;}
+.dp-row{display:flex;justify-content:space-between;gap:16px;color:#9ab;}
+.dp-row span:last-child{color:#fff;font-weight:600;}
+.dp-hint{font-size:9px;color:#566;margin-top:6px;}
+#drag-hint{position:absolute;bottom:46px;left:50%;transform:translateX(-50%);background:rgba(8,18,8,0.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:rgba(255,255,255,0.6);font-size:11px;padding:6px 16px;border-radius:14px;pointer-events:none;z-index:30;white-space:nowrap;transition:opacity 1s;border:0.5px solid rgba(255,255,255,0.08);}
+
+/* ── CAGE ── */
+#cage-screen{background:#0f1e0f;overflow-y:auto;}
+#cage-inner{padding:16px;max-width:900px;margin:0 auto;}
+#portfolio-bar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.pf-card{background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;flex:1;min-width:120px;}
+.pf-label{font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:2px;}
+.pf-value{font-size:16px;font-weight:500;color:#fff;}
+.pf-sub{font-size:10px;margin-top:2px;}
+.up{color:#5DCAA5;}.dn{color:#E24B4A;}
+#cage-canvas-wrap{position:relative;width:100%;height:260px;background:#0a150a;border-radius:10px;overflow:hidden;margin-bottom:12px;}
+canvas#cage-bg,canvas#cage-cv{position:absolute;top:0;left:0;display:block;}
+#cage-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.2);font-size:14px;pointer-events:none;}
+#cage-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:12px;}
+.cage-item{background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px;text-align:center;cursor:pointer;transition:all 0.15s;}
+.cage-item:hover,.cage-item.selected{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.3);}
+.cage-item-name{font-size:10px;color:#ccc;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cage-item-sub{font-size:10px;margin-top:1px;}
+#cage-detail{background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;display:none;}
+#cage-detail.active{display:block;}
+#cdh{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+#cd-name{font-size:16px;font-weight:500;color:#fff;}
+#cd-sec{font-size:11px;color:#888;margin-top:2px;}
+#cd-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px;}
+.cds{background:rgba(0,0,0,0.3);border-radius:6px;padding:7px 8px;text-align:center;}
+.cdsl{font-size:9px;color:#555;margin-bottom:2px;}
+.cdsv{font-size:13px;font-weight:500;color:#fff;}
+#cd-chart-wrap{height:60px;margin-bottom:10px;}
+canvas#cd-chart{width:100%;height:100%;}
+#cd-actions{display:flex;gap:8px;}
+.cd-btn{padding:7px 14px;border-radius:6px;border:none;font-size:12px;cursor:pointer;font-weight:500;}
+.cd-btn-rel{background:rgba(255,80,80,0.15);color:#E24B4A;border:0.5px solid rgba(255,80,80,0.3);}
+.cd-btn-buy{background:rgba(93,202,165,0.15);color:#5DCAA5;border:0.5px solid rgba(93,202,165,0.3);}
+/* ── スタート画面 ── */
+#start-screen{position:fixed;inset:0;z-index:1000;background:linear-gradient(160deg,#16320f 0%,#0a1f0a 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;overflow-y:auto;}
+#start-inner{max-width:520px;width:100%;text-align:center;}
+#start-title{font-family:Georgia,serif;font-size:46px;font-weight:bold;color:#fff;margin-bottom:6px;letter-spacing:1px;}
+#start-sub{font-size:16px;color:#8FC04C;margin-bottom:4px;}
+#start-tagline{font-size:12px;color:#7d9468;margin-bottom:22px;font-style:italic;}
+.start-canvas-wrap{margin:0 auto 20px;width:140px;height:120px;position:relative;}
+.how-card{background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:14px 16px;margin-bottom:10px;text-align:left;display:flex;align-items:flex-start;gap:12px;}
+.how-icon{font-size:22px;flex-shrink:0;line-height:1.3;}
+.how-text{flex:1;}
+.how-text b{color:#fff;font-size:14px;display:block;margin-bottom:2px;}
+.how-text span{color:#b8c9aa;font-size:12px;line-height:1.6;}
+#start-btn{margin-top:14px;background:#8FC04C;color:#163209;border:none;border-radius:30px;padding:15px 50px;font-size:18px;font-weight:bold;cursor:pointer;box-shadow:0 4px 16px rgba(143,192,76,0.35);transition:transform 0.15s;}
+#start-btn:active{transform:scale(0.95);}
+#start-note{font-size:10px;color:#5a6e4a;margin-top:16px;line-height:1.6;}
+#reset-link{position:absolute;bottom:8px;right:12px;font-size:10px;color:rgba(255,255,255,0.3);cursor:pointer;z-index:35;pointer-events:auto;}
+#reset-link:hover{color:rgba(255,255,255,0.7);}
+.hide{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- ══ スタート画面 ══ -->
+<div id="start-screen">
+  <div id="start-inner">
+    <div id="start-title">KabuMushi</div>
+    <div id="start-sub">株を、カブトムシで集める。</div>
+    <div id="start-tagline">財務指標が、生き物の姿になる</div>
+    <div class="start-canvas-wrap"><canvas id="start-beetle" width="140" height="120"></canvas></div>
+    <div class="how-card">
+      <div class="how-icon">🖐️</div>
+      <div class="how-text"><b>なぞって歩く</b><span>画面に指を置き、進みたい方向へずらすと、その向きへ歩き続ける。離すと止まる。</span></div>
+    </div>
+    <div class="how-card">
+      <div class="how-icon">🪲</div>
+      <div class="how-text"><b>背後から忍び寄る</b><span>カブトムシには視線がある。前から行くと逃げられる。後ろからそっと近づこう。</span></div>
+    </div>
+    <div class="how-card">
+      <div class="how-icon">🥅</div>
+      <div class="how-text"><b>ダブルタップで網</b><span>近づいてダブルタップ！大物は暴れるので連打で捕まえろ。長押しで株の情報が見られる。</span></div>
+    </div>
+    <div class="how-card">
+      <div class="how-icon">📊</div>
+      <div class="how-text"><b>見た目が財務指標</b><span>大きさ＝時価総額、速度＝値動き、光＝稼ぐ力、角＝市場の期待。集めるうちに株が分かる。</span></div>
+    </div>
+    <div class="how-card">
+      <div class="how-icon">🔍</div>
+      <div class="how-text"><b>二本指で見渡す</b><span>二本の指を広げる／狭めると、ズームして広い範囲を見渡せる（PCはマウスホイール）。</span></div>
+    </div>
+    <button id="start-btn">はじめる</button>
+    <div id="start-note">※ 本アプリは株価データのサンプルを用いたデモです。<br>キャラクター表現は実在企業を評価・推奨するものではありません。</div>
+  </div>
+</div>
+
+<div id="wrap">
+<div id="nav">
+  <button class="nav-btn active" onclick="switchScreen('field',this)">🌿 フィールド</button>
+  <button class="nav-btn" onclick="switchScreen('cage',this)">🪲 虫カゴ <span id="nav-count">(0)</span></button>
+  <span id="reset-link" onclick="resetProgress()">記録をリセット</span>
+</div>
+
+<!-- FIELD -->
+<div id="field-screen" class="screen active">
+<div id="field">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div class="hud-box">保有資産<strong id="asset-val">¥500,000</strong></div>
+    <div class="hud-box" style="text-align:center;font-size:10px">大きさ=時価総額　色=業種　速度=β値<br>光=ROE　ツノ=PER　長押しで詳細</div>
+    <div class="hud-box" style="text-align:right">捕獲<strong id="hud-count">0匹</strong></div>
+  </div>
+  <div id="legend">
+    <div class="li"><div class="ld" style="background:#EF9F27"></div>製造</div>
+    <div class="li"><div class="ld" style="background:#AFA9EC"></div>通信</div>
+    <div class="li"><div class="ld" style="background:#5DCAA5"></div>金融</div>
+    <div class="li"><div class="ld" style="background:#ED93B1"></div>エンタメ</div>
+    <div class="li"><div class="ld" style="background:#85B7EB"></div>精密</div>
+    <div class="li"><div class="ld" style="background:#F0997B"></div>小売</div>
+    <div class="li"><div class="ld" style="background:#97C459"></div>医薬</div>
+  </div>
+  <div id="drag-hint">なぞって移動 / 二本指でズーム / 近づいてダブルタップで網</div>
+  <div id="detail-popup">
+    <b id="dp-name">—</b>
+    <div class="dp-row"><span>時価総額</span><span id="dp-cap">—</span></div>
+    <div class="dp-row"><span>β値（速度）</span><span id="dp-beta">—</span></div>
+    <div class="dp-row"><span>ROE（輝き）</span><span id="dp-roe">—</span></div>
+    <div class="dp-row"><span>PER（ツノ）</span><span id="dp-per">—</span></div>
+    <div class="dp-row"><span>配当利回り</span><span id="dp-div">—</span></div>
+    <div class="dp-row"><span>捕獲難易度</span><span id="dp-diff">—</span></div>
+    <div class="dp-hint">長押しで表示</div>
+  </div>
+  <div id="msg"></div>
+</div>
+</div>
+
+<!-- CAGE -->
+<div id="cage-screen" class="screen">
+<div id="cage-inner">
+  <div id="portfolio-bar">
+    <div class="pf-card"><div class="pf-label">保有資産（現金）</div><div class="pf-value" id="pf-cash">¥0</div><div class="pf-sub" style="color:#888">株の購入に使える</div></div>
+    <div class="pf-card"><div class="pf-label">虫カゴ総資産（株の時価）</div><div class="pf-value" id="pf-total">¥0</div><div class="pf-sub" id="pf-change">—</div></div>
+    <div class="pf-card"><div class="pf-label">損益（含み益/損）</div><div class="pf-value" id="pf-pl">¥0</div><div class="pf-sub" id="pf-pl-pct" style="color:#888">買値との差</div></div>
+    <div class="pf-card"><div class="pf-label">総合計（現金＋株）</div><div class="pf-value" id="pf-net" style="font-size:15px">¥0</div><div class="pf-sub" id="pf-net-sub" style="color:#888">スタート¥500,000</div></div>
+  </div>
+  <div id="cage-canvas-wrap">
+    <canvas id="cage-bg"></canvas><canvas id="cage-cv"></canvas>
+    <div id="cage-empty">まだ虫を捕まえていません</div>
+  </div>
+  <div id="cage-list"></div>
+  <div id="cage-detail">
+    <div id="cdh">
+      <canvas id="cd-icon" width="56" height="56"></canvas>
+      <div><div id="cd-name">—</div><div id="cd-sec">—</div></div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:18px;font-weight:500;color:#fff" id="cd-price">—</div>
+        <div style="font-size:12px" id="cd-chg">—</div>
+      </div>
+    </div>
+    <div id="cd-stats">
+      <div class="cds"><div class="cdsl">買値（1株）</div><div class="cdsv" id="cds-buy">—</div></div>
+      <div class="cds"><div class="cdsl">現在値（1株）</div><div class="cdsv" id="cds-cur">—</div></div>
+      <div class="cds"><div class="cdsl">損益</div><div class="cdsv" id="cds-pl">—</div></div>
+      <div class="cds"><div class="cdsl">時価総額</div><div class="cdsv" id="cds-cap">—</div></div>
+      <div class="cds"><div class="cdsl">β値</div><div class="cdsv" id="cds-beta">—</div></div>
+      <div class="cds"><div class="cdsl">ROE</div><div class="cdsv" id="cds-roe">—</div></div>
+      <div class="cds"><div class="cdsl">PER</div><div class="cdsv" id="cds-per">—</div></div>
+      <div class="cds"><div class="cdsl">配当利回り</div><div class="cdsv" id="cds-div">—</div></div>
+    </div>
+    <div style="font-size:10px;color:#444;margin-bottom:5px">株価推移（模擬）</div>
+    <div id="cd-chart-wrap"><canvas id="cd-chart"></canvas></div>
+    <div id="cd-actions">
+      <button class="cd-btn cd-btn-buy" onclick="openBroker()">📈 証券会社で購入</button>
+      <button class="cd-btn cd-btn-rel" onclick="releaseBeetle()">💴 売却する</button>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════
+const COMPANIES=[
+  {name:'トヨタ',      cap:40,sector:'製造',  color:'#EF9F27',stroke:'#854F0B',beta:0.8,roe:13,per:9, eq:37,divYield:2.8,growth:8, ticker:'7203',price:3000},
+  {name:'ソフトバンク', cap:14,sector:'通信',  color:'#AFA9EC',stroke:'#534AB7',beta:1.4,roe:20,per:18,eq:8, divYield:4.5,growth:3, ticker:'9984',price:9800},
+  {name:'三菱UFJ',     cap:18,sector:'金融',  color:'#5DCAA5',stroke:'#0F6E56',beta:1.1,roe:7, per:12,eq:6, divYield:3.2,growth:12,ticker:'8306',price:1800},
+  {name:'任天堂',      cap:8, sector:'エンタメ',color:'#ED93B1',stroke:'#993556',beta:0.9,roe:18,per:22,eq:82,divYield:2.1,growth:15,ticker:'7974',price:8500},
+  {name:'キーエンス',  cap:17,sector:'精密',  color:'#85B7EB',stroke:'#185FA5',beta:1.0,roe:26,per:48,eq:94,divYield:0.5,growth:18,ticker:'6861',price:62000},
+  {name:'ファーストリテ',cap:12,sector:'小売', color:'#F0997B',stroke:'#993C1D',beta:0.8,roe:25,per:38,eq:45,divYield:0.9,growth:12,ticker:'9983',price:48000},
+  {name:'NTT',         cap:15,sector:'通信',  color:'#AFA9EC',stroke:'#534AB7',beta:0.5,roe:12,per:13,eq:24,divYield:3.1,growth:5, ticker:'9432',price:150},
+  {name:'ホンダ',      cap:7, sector:'製造',  color:'#EF9F27',stroke:'#854F0B',beta:0.9,roe:8, per:7, eq:40,divYield:3.5,growth:6, ticker:'7267',price:1600},
+  {name:'エーザイ',    cap:2, sector:'医薬',  color:'#97C459',stroke:'#3B6D11',beta:0.7,roe:6, per:60,eq:56,divYield:1.2,growth:25,ticker:'4523',price:6000},
+  {name:'楽天',        cap:2, sector:'通信',  color:'#AFA9EC',stroke:'#534AB7',beta:1.8,roe:-5,per:99,eq:5, divYield:0.0,growth:-8,ticker:'4755',price:800},
+];
+// プレイヤーの保有資産（使える予算）。捕獲で株価ぶん減り、売却で戻る
+let playerAsset=500000;
+const START_ASSET=500000;
+function beetleSize(c){return Math.round(28+(Math.log10(Math.max(c.cap,0.5))/Math.log10(50))*58);}
+function beetleSpeed(c){return 0.5+c.beta*2.0;}
+function beetleVisionR(c){return 55+(c.cap/40)*130;}  // 視野距離
+function beetleVisionAng(c){return Math.PI*0.65;}     // 視野角度 ±65° (前方130°)
+function beetleGlow(c){return Math.max(0,Math.min(1,c.roe/30));}
+function beetleHornLen(c){return 0.4+Math.min(c.per,70)/46;}
+function captureDiff(c){
+  const info=1-(Math.log10(Math.max(c.cap,0.5))/Math.log10(50));
+  return Math.max(2,Math.min(12,Math.round(2+info*c.beta*12)));
+}
+function dividendInterval(c){return c.divYield<=0?Infinity:Math.max(55,280-c.divYield*38);}
+function dist(ax,ay,bx,by){return Math.hypot(ax-bx,ay-by);}
+function fmtNum(n){
+  if(Math.abs(n)>=1e12)return(n/1e12).toFixed(1)+'兆';
+  if(Math.abs(n)>=1e8)return(n/1e8).toFixed(1)+'億';
+  if(Math.abs(n)>=1e4)return(n/1e4).toFixed(0)+'万';
+  return n.toLocaleString();
+}
+
+// ══════════════════════════════════════════════
+// CANVAS SETUP
+// ══════════════════════════════════════════════
+const fieldEl=document.getElementById('field');
+const bgCv=document.getElementById('bg');
+const gameCv=document.getElementById('game');
+let W=0,H=0; // 画面（ビューポート）サイズ
+
+// ── ワールド（フィールド全体）サイズ ──
+const WORLD_W=2400, WORLD_H=1800;
+// ── カメラ：中心のワールド座標 + ズーム倍率 ──
+let cam={cx:WORLD_W/2, cy:WORLD_H/2, zoom:1};
+const ZOOM_MIN=0.55, ZOOM_MAX=1.8;
+
+function resizeField(){
+  W=fieldEl.offsetWidth;H=fieldEl.offsetHeight;
+  bgCv.width=gameCv.width=W;bgCv.height=gameCv.height=H;
+}
+
+// 座標変換：ワールド → スクリーン
+function worldToScreen(wx,wy){
+  return { x:(wx-cam.cx)*cam.zoom+W/2, y:(wy-cam.cy)*cam.zoom+H/2 };
+}
+// 座標変換：スクリーン → ワールド
+function screenToWorld(sx,sy){
+  return { x:(sx-W/2)/cam.zoom+cam.cx, y:(sy-H/2)/cam.zoom+cam.cy };
+}
+
+// カメラをプレイヤー中心に追従（ズーム考慮しワールド端でクランプ）
+function updateCamera(){
+  cam.cx=player.x;
+  cam.cy=player.y;
+  // 画面に映るワールド範囲の半分
+  const halfW=(W/2)/cam.zoom, halfH=(H/2)/cam.zoom;
+  // 端でクランプ（フィールドの外を見せない）
+  if(WORLD_W>=halfW*2){ cam.cx=Math.max(halfW,Math.min(WORLD_W-halfW,cam.cx)); }
+  else { cam.cx=WORLD_W/2; }
+  if(WORLD_H>=halfH*2){ cam.cy=Math.max(halfH,Math.min(WORLD_H-halfH,cam.cy)); }
+  else { cam.cy=WORLD_H/2; }
+}
+
+// 背景描画（カメラ＋ズーム連動）
+function drawFieldBg(){
+  const ctx=bgCv.getContext('2d');
+  // 空のベース（時間帯で変化）
+  ctx.fillStyle=SKY.ground;ctx.fillRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(W/2,H/2);
+  ctx.scale(cam.zoom,cam.zoom);
+  ctx.translate(-cam.cx,-cam.cy);
+
+  // セクターごとの地形ベース色（4分割）
+  const secW=WORLD_W*.5, secH=WORLD_H*.5;
+  const sectors=[
+    {x:0,    y:0,    c:SKY.manufacturing}, // 左上：製造（土っぽい）
+    {x:secW, y:0,    c:SKY.tech},          // 右上：精密（涼しい青緑）
+    {x:0,    y:secH, c:SKY.finance},       // 左下：金融（落ち着いた緑）
+    {x:secW, y:secH, c:SKY.telecom},       // 右下：通信（紫がかった緑）
+  ];
+  sectors.forEach(s=>{ctx.fillStyle=s.c;ctx.fillRect(s.x,s.y,secW,secH);});
+
+  // 地面のテクスチャ（うっすらした斑点）
+  ctx.fillStyle='rgba(255,255,255,0.012)';
+  GROUND_SPOTS.forEach(([x,y,r])=>{ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();});
+
+  // 池（金融エリア＝左下に水辺）
+  drawPond(ctx, WORLD_W*0.22, WORLD_H*0.74, 220, 130);
+  drawPond(ctx, WORLD_W*0.30, WORLD_H*0.82, 120, 70);
+
+  // ワールド境界（柔らかい光る縁）
+  ctx.strokeStyle='rgba(143,192,76,0.22)';ctx.lineWidth=6;
+  ctx.strokeRect(0,0,WORLD_W,WORLD_H);
+
+  // 自然物（茂み・木・切り株・花・草）をy座標順に描いて奥行きを出す
+  NATURE.forEach(o=>drawNature(ctx,o,SKY));
+
+  ctx.restore();
+
+  // 時間帯の色オーバーレイ（画面全体に薄く）
+  if(SKY.overlay){
+    ctx.save();
+    ctx.fillStyle=SKY.overlay;
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+}
+
+// 池を描く
+function drawPond(ctx,x,y,rw,rh){
+  ctx.save();
+  ctx.fillStyle='rgba(60,130,150,0.25)';
+  ctx.beginPath();ctx.ellipse(x,y,rw,rh,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(90,170,190,0.18)';
+  ctx.beginPath();ctx.ellipse(x,y,rw*0.7,rh*0.7,0,0,Math.PI*2);ctx.fill();
+  // きらめき
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.beginPath();ctx.ellipse(x-rw*0.3,y-rh*0.3,rw*0.12,rh*0.06,-0.3,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+// 自然物を1つ描く
+function drawNature(ctx,o,sky){
+  const {type,x,y,s}=o;
+  ctx.save();ctx.translate(x,y);
+  if(type==='bush'){
+    ctx.fillStyle='rgba(16,46,16,0.6)';
+    ctx.beginPath();ctx.arc(0,0,s,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(26,64,26,0.55)';
+    ctx.beginPath();ctx.arc(-s*0.4,-s*0.2,s*0.6,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(s*0.4,-s*0.1,s*0.55,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(36,80,36,0.4)';
+    ctx.beginPath();ctx.arc(0,-s*0.3,s*0.5,0,Math.PI*2);ctx.fill();
+  } else if(type==='tree'){
+    // 影
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    ctx.beginPath();ctx.ellipse(0,s*0.2,s*0.9,s*0.25,0,0,Math.PI*2);ctx.fill();
+    // 幹
+    ctx.fillStyle='#5a3d22';
+    ctx.fillRect(-s*0.12,-s*0.2,s*0.24,s*0.5);
+    // 葉（3つの重なった円）
+    ctx.fillStyle='rgba(24,70,24,0.92)';
+    ctx.beginPath();ctx.arc(0,-s*0.7,s*0.7,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(30,86,30,0.92)';
+    ctx.beginPath();ctx.arc(-s*0.5,-s*0.5,s*0.5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(s*0.5,-s*0.5,s*0.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(40,100,40,0.7)';
+    ctx.beginPath();ctx.arc(-s*0.15,-s*0.85,s*0.4,0,Math.PI*2);ctx.fill();
+  } else if(type==='stump'){
+    ctx.fillStyle='rgba(0,0,0,0.15)';
+    ctx.beginPath();ctx.ellipse(0,s*0.15,s*0.9,s*0.3,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#6b4a2a';
+    ctx.beginPath();ctx.ellipse(0,0,s*0.8,s*0.5,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#7d5733';
+    ctx.beginPath();ctx.ellipse(0,-s*0.1,s*0.7,s*0.42,0,0,Math.PI*2);ctx.fill();
+    // 年輪
+    ctx.strokeStyle='rgba(90,60,30,0.6)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.ellipse(0,-s*0.1,s*0.4,s*0.24,0,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.ellipse(0,-s*0.1,s*0.18,s*0.11,0,0,Math.PI*2);ctx.stroke();
+  } else if(type==='grass'){
+    ctx.strokeStyle='rgba(50,110,40,0.5)';ctx.lineWidth=2;ctx.lineCap='round';
+    for(let i=-2;i<=2;i++){
+      ctx.beginPath();ctx.moveTo(i*4,0);
+      ctx.quadraticCurveTo(i*4+i*2,-s*0.6,i*5+i*3,-s);ctx.stroke();
+    }
+  } else if(type==='flower'){
+    ctx.strokeStyle='rgba(50,110,40,0.5)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-s);ctx.stroke();
+    ctx.fillStyle=o.color||'#E8A0C0';
+    for(let i=0;i<5;i++){const a=i/5*Math.PI*2;
+      ctx.beginPath();ctx.arc(Math.cos(a)*s*0.3,-s+Math.sin(a)*s*0.3,s*0.22,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle='#F5D547';
+    ctx.beginPath();ctx.arc(0,-s,s*0.18,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+// 時間帯ごとの配色（起動時刻で決定）
+const SKY=(()=>{
+  const h=new Date().getHours();
+  if(h>=5&&h<10){ // 朝
+    return {ground:'#1a3318',manufacturing:'rgba(120,90,40,0.10)',tech:'rgba(120,160,200,0.10)',finance:'rgba(80,150,110,0.10)',telecom:'rgba(150,140,200,0.10)',overlay:'rgba(255,220,150,0.05)',leaf:'#2a6a2a'};
+  } else if(h>=10&&h<16){ // 昼
+    return {ground:'#1c3a1a',manufacturing:'rgba(180,140,60,0.08)',tech:'rgba(120,170,210,0.08)',finance:'rgba(70,160,110,0.08)',telecom:'rgba(160,150,210,0.08)',overlay:null,leaf:'#2e7a2e'};
+  } else if(h>=16&&h<19){ // 夕方
+    return {ground:'#2a2818',manufacturing:'rgba(200,120,50,0.12)',tech:'rgba(150,130,160,0.10)',finance:'rgba(140,140,80,0.10)',telecom:'rgba(180,120,150,0.10)',overlay:'rgba(255,140,60,0.08)',leaf:'#3a6a2a'};
+  } else { // 夜
+    return {ground:'#0e1c14',manufacturing:'rgba(60,70,110,0.12)',tech:'rgba(70,90,140,0.12)',finance:'rgba(50,90,90,0.12)',telecom:'rgba(90,80,140,0.12)',overlay:'rgba(20,30,80,0.18)',leaf:'#1e4a1e'};
+  }
+})();
+
+// 地面の斑点
+const GROUND_SPOTS=(()=>{
+  const arr=[];let seed=12345;
+  const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
+  for(let i=0;i<120;i++)arr.push([rnd()*WORLD_W,rnd()*WORLD_H,8+rnd()*30]);
+  return arr;
+})();
+
+// 自然物の配置（固定シード）— y順にソートして奥行き表現
+const NATURE=(()=>{
+  const arr=[];let seed=777;
+  const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
+  // 木（大きめ、外周寄りに）
+  for(let i=0;i<14;i++)arr.push({type:'tree',x:rnd()*WORLD_W,y:rnd()*WORLD_H,s:50+rnd()*30});
+  // 茂み
+  for(let i=0;i<22;i++)arr.push({type:'bush',x:rnd()*WORLD_W,y:rnd()*WORLD_H,s:30+rnd()*35});
+  // 切り株（樹液スポット風）
+  for(let i=0;i<8;i++)arr.push({type:'stump',x:rnd()*WORLD_W,y:rnd()*WORLD_H,s:28+rnd()*14});
+  // 草
+  for(let i=0;i<40;i++)arr.push({type:'grass',x:rnd()*WORLD_W,y:rnd()*WORLD_H,s:14+rnd()*12});
+  // 花
+  const fcolors=['#E8A0C0','#F0C0D8','#C0A0E8','#F5B870'];
+  for(let i=0;i<18;i++)arr.push({type:'flower',x:rnd()*WORLD_W,y:rnd()*WORLD_H,s:10+rnd()*8,color:fcolors[i%4]});
+  // y座標でソート（上のものから描いて奥行き）
+  arr.sort((a,b)=>a.y-b.y);
+  return arr;
+})();
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let player={x:WORLD_W/2,y:WORLD_H/2,vx:0,vy:0,angle:0}; // angleは進行方向
+let beetles=[],caught=[],playerStep=0;
+let mash=null;
+// 虫網アニメーション
+// phase: 'swing'(振り下ろし中) | 'hold'(被せて静止) | 'success' | 'fail'
+let netSwing=null;
+// {phase, progress(0→1), x, y, targetBeetle}
+
+// ── 演出システム ──
+let particles=[];          // ワールド座標のパーティクル
+let captureFx=null;        // 捕獲成功の全画面演出 {t, name, color, rare}
+let screenFlash=0;         // 画面フラッシュ強度 0〜1
+
+// パーティクルを撒く
+function spawnParticles(x,y,color,count,opts={}){
+  const spd=opts.spd||4, life=opts.life||40, grav=opts.grav||0.12, size=opts.size||4;
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2;
+    const v=spd*(0.4+Math.random()*0.6);
+    particles.push({
+      x,y, vx:Math.cos(a)*v, vy:Math.sin(a)*v-spd*0.3,
+      life, maxLife:life, color, size:size*(0.6+Math.random()*0.6),
+      grav, shape:opts.shape||'circle',
+    });
+  }
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx;p.y+=p.vy;p.vy+=p.grav;p.vx*=0.97;
+    p.life--;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+function drawParticles(ctx){
+  particles.forEach(p=>{
+    const a=p.life/p.maxLife;
+    ctx.globalAlpha=a;
+    ctx.fillStyle=p.color;
+    if(p.shape==='star'){
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate((1-a)*Math.PI*2);
+      ctx.beginPath();
+      for(let k=0;k<5;k++){const ang=k/5*Math.PI*2-Math.PI/2;
+        ctx.lineTo(Math.cos(ang)*p.size,Math.sin(ang)*p.size);
+        const ang2=(k+0.5)/5*Math.PI*2-Math.PI/2;
+        ctx.lineTo(Math.cos(ang2)*p.size*0.45,Math.sin(ang2)*p.size*0.45);}
+      ctx.closePath();ctx.fill();ctx.restore();
+    } else {
+      ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();
+    }
+  });
+  ctx.globalAlpha=1;
+}
+
+// ドラッグ状態
+let drag={active:false,lastX:0,lastY:0};
+
+function spawnBeetles(){
+  beetles=[];
+  COMPANIES.forEach(c=>{
+    if(caught.find(x=>x.name===c.name))return;
+    const angle=Math.random()*Math.PI*2;
+    const spd=beetleSpeed(c);
+    beetles.push({
+      data:c,
+      x:120+Math.random()*(WORLD_W-240), y:120+Math.random()*(WORLD_H-240),
+      vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd,
+      angle:angle, // 向いている方向
+      size:beetleSize(c), speed:spd,
+      visionR:beetleVisionR(c),
+      visionAng:beetleVisionAng(c),
+      glow:beetleGlow(c), hornLen:beetleHornLen(c),
+      fleeing:false, wobble:Math.random()*Math.PI*2,
+      eyeAngle:Math.random()*Math.PI*2, // 視線の向き（独立して動く）
+      eyeSpeed:(Math.random()-0.5)*0.012, // キョロキョロ速度
+      eyeTimer:0,
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+// 扇形視野チェック
+// カブトムシが前方visionAng以内にプレイヤーがいるか
+// ══════════════════════════════════════════════
+function inVision(beetle,px,py){
+  const d=dist(beetle.x,beetle.y,px,py);
+  if(d>beetle.visionR)return false;
+  // eyeAngle（独立した視線）とプレイヤーへの角度の差で判定
+  const toPlayer=Math.atan2(py-beetle.y,px-beetle.x);
+  let diff=toPlayer-beetle.eyeAngle;
+  while(diff>Math.PI)diff-=Math.PI*2;
+  while(diff<-Math.PI)diff+=Math.PI*2;
+  return Math.abs(diff)<beetle.visionAng;
+}
+
+// ══════════════════════════════════════════════
+// DRAW BEETLE
+// ══════════════════════════════════════════════
+function drawOneBeetle(ctx,x,y,size,color,stroke,glow,hornLen,fleeing,wobble,t,pinned,angle){
+  ctx.save();ctx.translate(x,y);
+  // 角度固定（常に上向き）。微細なゆらぎのみ
+  const wob=pinned?0:fleeing?Math.sin(t*0.022)*0.05:Math.sin(wobble+t*0.0008)*0.018;
+  ctx.rotate(wob);
+  const s=size/40;
+
+  if(glow>0.15){
+    ctx.globalAlpha=glow*0.22*(0.75+0.25*Math.sin(t*0.003));
+    const g=ctx.createRadialGradient(0,0,size*.1,0,0,size*1.05);
+    g.addColorStop(0,color);g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,size*1.05,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+  ctx.fillStyle='rgba(0,0,0,0.18)';
+  ctx.beginPath();ctx.ellipse(s*2,s*18,s*16,s*5,0,0,Math.PI*2);ctx.fill();
+
+  // 脚
+  const lw=pinned?Math.sin(t*0.06)*s*6:fleeing?Math.sin(t*0.04)*s*4:Math.sin(t*0.009+wobble)*s*2;
+  ctx.strokeStyle=stroke;ctx.lineCap='round';
+  [
+    {rx:-s*12,ry:-s*2, ex:-s*24,ey:-s*12,w:lw},
+    {rx: s*12,ry:-s*2, ex: s*24,ey:-s*12,w:-lw},
+    {rx:-s*14,ry: s*4, ex:-s*28,ey: s*4, w:lw},
+    {rx: s*14,ry: s*4, ex: s*28,ey: s*4, w:-lw},
+    {rx:-s*12,ry: s*12,ex:-s*24,ey: s*20,w:lw},
+    {rx: s*12,ry: s*12,ex: s*24,ey: s*20,w:-lw},
+  ].forEach(({rx,ry,ex,ey,w})=>{
+    const mx=(rx+ex)/2,my=(ry+ey)/2+w;
+    ctx.lineWidth=Math.max(1,s*1.8);ctx.beginPath();ctx.moveTo(rx,ry);ctx.lineTo(mx,my);ctx.stroke();
+    ctx.lineWidth=Math.max(0.8,s*1.2);ctx.beginPath();ctx.moveTo(mx,my);ctx.lineTo(ex,ey+w*.4);ctx.stroke();
+  });
+
+  // 上翅
+  const eW=s*16,eH=s*25,eTop=-s*8;
+  ctx.lineWidth=Math.max(1,s*1.5);
+  ctx.fillStyle=color;ctx.strokeStyle=stroke;
+  ctx.beginPath();ctx.moveTo(0,eTop);
+  ctx.bezierCurveTo(-eW*.25,eTop,-eW,eTop+eH*.12,-eW,eTop+eH*.45);
+  ctx.bezierCurveTo(-eW,eTop+eH*.88,-eW*.35,eTop+eH,0,eTop+eH);
+  ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,eTop);
+  ctx.bezierCurveTo(eW*.25,eTop,eW,eTop+eH*.12,eW,eTop+eH*.45);
+  ctx.bezierCurveTo(eW,eTop+eH*.88,eW*.35,eTop+eH,0,eTop+eH);
+  ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.lineWidth=Math.max(0.8,s*1.1);ctx.beginPath();ctx.moveTo(0,eTop);ctx.lineTo(0,eTop+eH);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.beginPath();ctx.ellipse(-eW*.36,eTop+eH*.26,eW*.15,eH*.15,-0.3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(eW*.36,eTop+eH*.26,eW*.15,eH*.15,0.3,0,Math.PI*2);ctx.fill();
+
+  // 前胸
+  const pTop=-s*16,pBot=eTop+s;
+  ctx.fillStyle=color;ctx.strokeStyle=stroke;ctx.lineWidth=Math.max(1,s*1.5);
+  ctx.beginPath();ctx.moveTo(-s*6,pBot);
+  ctx.bezierCurveTo(-s*10,pBot,-s*11,pTop+s*3,-s*7,pTop);
+  ctx.lineTo(s*7,pTop);ctx.bezierCurveTo(s*11,pTop+s*3,s*10,pBot,s*6,pBot);
+  ctx.closePath();ctx.fill();ctx.stroke();
+
+  // 頭
+  const hY=-s*20;
+  ctx.fillStyle=color;ctx.strokeStyle=stroke;ctx.lineWidth=Math.max(1,s*1.5);
+  ctx.beginPath();ctx.ellipse(0,hY,s*6.5,s*5,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#1a1a1a';
+  ctx.beginPath();ctx.arc(-s*4,hY-s*.5,s*1.9,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc( s*4,hY-s*.5,s*1.9,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.beginPath();ctx.arc(-s*3.3,hY-s*1,s*.65,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc( s*3.3,hY-s*1,s*.65,0,Math.PI*2);ctx.fill();
+
+  // 一本角
+  const hornH=s*13*hornLen,hBase=-s*22,hTip=hBase-hornH;
+  ctx.strokeStyle=stroke;ctx.lineCap='round';
+  ctx.lineWidth=Math.max(2,s*3.2);ctx.beginPath();ctx.moveTo(0,hBase);ctx.lineTo(0,hTip);ctx.stroke();
+  ctx.lineWidth=Math.max(1.5,s*2.2);
+  ctx.beginPath();ctx.moveTo(0,hTip);ctx.lineTo(-s*5,hTip-s*5);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,hTip);ctx.lineTo( s*5,hTip-s*5);ctx.stroke();
+  ctx.lineWidth=Math.max(1,s*1.8);
+  ctx.beginPath();ctx.moveTo(0,hBase-s*3);ctx.lineTo(-s*3,hBase-s*7);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,hBase-s*3);ctx.lineTo( s*3,hBase-s*7);ctx.stroke();
+
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════
+// DRAW PLAYER (虫取り少年)
+// ══════════════════════════════════════════════
+function drawPlayer(ctx,t){
+  const {x,y}=player;
+  const moving=Math.hypot(moveVec.x,moveVec.y)>0.3;
+  ctx.save();ctx.translate(x,y);
+
+  // 影
+  ctx.fillStyle='rgba(0,0,0,0.22)';
+  ctx.beginPath();ctx.ellipse(0,17,11,4,0,0,Math.PI*2);ctx.fill();
+
+  // 脚（歩行アニメ）
+  const leg=moving?Math.sin(playerStep*0.3)*5:0;
+  ctx.strokeStyle='#5a6e8a';ctx.lineWidth=3.5;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-4,9);ctx.lineTo(-6,18+leg);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(4,9);ctx.lineTo(6,18-leg);ctx.stroke();
+  // 靴
+  ctx.strokeStyle='#3a4a5a';ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(-6,18+leg);ctx.lineTo(-8,18+leg);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(6,18-leg);ctx.lineTo(8,18-leg);ctx.stroke();
+
+  // 左腕（虫カゴを持つ側）
+  ctx.strokeStyle='#7BA86A';ctx.lineWidth=3;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-5,2);ctx.lineTo(-11,8);ctx.stroke();
+  // 虫カゴ（腰横にぶら下げる）
+  ctx.save();
+  ctx.translate(-13,11);
+  ctx.fillStyle='rgba(180,140,80,0.85)';
+  ctx.strokeStyle='#6b4a2a';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.roundRect(-4,-4,8,9,2);ctx.fill();ctx.stroke();
+  // カゴの格子
+  ctx.strokeStyle='rgba(80,55,25,0.6)';ctx.lineWidth=0.6;
+  ctx.beginPath();ctx.moveTo(-1.5,-4);ctx.lineTo(-1.5,5);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(1.5,-4);ctx.lineTo(1.5,5);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(4,0);ctx.stroke();
+  ctx.restore();
+
+  // 胴体（緑のシャツ＝自然に馴染む中性的な色）
+  ctx.fillStyle='#7BA86A';
+  ctx.beginPath();ctx.roundRect(-7,1,14,12,4);ctx.fill();
+  // シャツのハイライト
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.beginPath();ctx.roundRect(-5,2,4,9,2);ctx.fill();
+
+  // 首
+  ctx.fillStyle='#E8C0A0';
+  ctx.fillRect(-2,-3,4,5);
+
+  // 頭
+  ctx.fillStyle='#F2C9A8';
+  ctx.beginPath();ctx.arc(0,-7,7,0,Math.PI*2);ctx.fill();
+  // 目（中性的にシンプルな点目を2つ）
+  ctx.fillStyle='#3a2a1a';
+  ctx.beginPath();ctx.arc(-2.5,-7,1.2,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(2.5,-7,1.2,0,Math.PI*2);ctx.fill();
+  // ほっぺ
+  ctx.fillStyle='rgba(240,150,130,0.4)';
+  ctx.beginPath();ctx.arc(-4,-5,1.6,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(4,-5,1.6,0,Math.PI*2);ctx.fill();
+
+  // 麦わら帽子
+  ctx.fillStyle='#E0B860';
+  // つば
+  ctx.beginPath();ctx.ellipse(0,-11,11,4,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#B8923C';ctx.lineWidth=0.8;ctx.stroke();
+  // 山の部分
+  ctx.fillStyle='#EAC470';
+  ctx.beginPath();ctx.ellipse(0,-13,6,4,0,Math.PI,0);ctx.fill();
+  ctx.beginPath();ctx.arc(0,-13,6,Math.PI,0);ctx.fill();
+  ctx.fillStyle='#EAC470';
+  ctx.beginPath();ctx.moveTo(-6,-13);ctx.quadraticCurveTo(0,-19,6,-13);ctx.closePath();ctx.fill();
+  // 帽子のリボン
+  ctx.strokeStyle='#C8843C';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-5.5,-12.5);ctx.quadraticCurveTo(0,-11,5.5,-12.5);ctx.stroke();
+
+  // 右腕＋虫網（前方へ構える）
+  ctx.strokeStyle='#E8C0A0';ctx.lineWidth=3;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(5,3);ctx.lineTo(11,-2);ctx.stroke();
+  // 網の柄
+  ctx.strokeStyle='#9a6b2e';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(11,-2);ctx.lineTo(26,-18);ctx.stroke();
+  // 網の枠＋袋（本物らしく）
+  drawNetHead(ctx,26,-18,Math.atan2(-16,15),9,false);
+
+  ctx.restore();
+}
+
+// 虫網のヘッド（枠＋白い半透明の袋）を描く共通関数
+// cx,cy=枠の中心, ang=柄から枠への向き, r=枠半径, big=大きめ表示
+function drawNetHead(ctx,cx,cy,ang,r,active){
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(ang+Math.PI/2);
+  // 袋（白い半透明、奥にふくらむ）
+  ctx.fillStyle=active?'rgba(255,255,255,0.28)':'rgba(255,255,255,0.18)';
+  ctx.beginPath();
+  ctx.moveTo(-r,0);
+  ctx.bezierCurveTo(-r,r*1.6, r,r*1.6, r,0);
+  ctx.closePath();ctx.fill();
+  // 袋のメッシュ（細い線）
+  ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=0.5;
+  for(let i=1;i<=3;i++){
+    const yy=r*0.5*i;
+    ctx.beginPath();ctx.moveTo(-r*(1-i*0.18),yy*0.7);ctx.lineTo(r*(1-i*0.18),yy*0.7);ctx.stroke();
+  }
+  for(let i=-2;i<=2;i++){
+    ctx.beginPath();ctx.moveTo(r*i/2.2,0);ctx.lineTo(r*i/3,r*1.3);ctx.stroke();
+  }
+  // 金属の枠（リング）
+  ctx.strokeStyle=active?'#d8d8d8':'#c0c0c0';ctx.lineWidth=2.2;
+  ctx.beginPath();ctx.ellipse(0,0,r,r*0.45,0,0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════
+// DRAW NET SWING ANIMATION
+// 虫網を振り下ろして被せる本格演出
+// ══════════════════════════════════════════════
+function drawNetSwing(ctx,t){
+  if(!netSwing)return;
+  const {phase,progress,x,y,startX,startY,targetBeetle}=netSwing;
+
+  ctx.save();
+
+  if(phase==='swing'){
+    // 振り下ろし中: プレイヤーの手元から弧を描いてターゲットへ
+    const px=player.x,py=player.y;
+    const tx=targetBeetle?targetBeetle.x:x;
+    const ty=targetBeetle?targetBeetle.y:y;
+    // 弧の中間点（振り上げの頂点）
+    const arcX=(px+tx)/2-(ty-py)*0.5;
+    const arcY=(py+ty)/2+(px-tx)*0.5-60;
+    // progress 0→1 でベジェ曲線上の位置を求める
+    const ep=progress;
+    const netX=Math.pow(1-ep,2)*px+2*(1-ep)*ep*arcX+ep*ep*tx;
+    const netY=Math.pow(1-ep,2)*py+2*(1-ep)*ep*arcY+ep*ep*ty;
+    // 網の傾き（進行方向）
+    const dx=ep<0.98?(2*(1-ep)*(arcX-px)+2*ep*(tx-arcX)):(tx-arcX);
+    const dy=ep<0.98?(2*(1-ep)*(arcY-py)+2*ep*(ty-arcY)):(ty-arcY);
+    const ang=Math.atan2(dy,dx);
+
+    const r=22+progress*8; // 振り下ろすにつれ大きくなる
+
+    ctx.translate(netX,netY);ctx.rotate(ang+Math.PI/2);
+    // 柄（木製）
+    ctx.strokeStyle='#9a6b2e';ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(0,r*0.4);ctx.lineTo(0,r+38);ctx.stroke();
+    // 袋（白い半透明・進行方向にふくらむ）
+    ctx.fillStyle='rgba(255,255,255,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(-r,0);
+    ctx.bezierCurveTo(-r,-r*1.7,r,-r*1.7,r,0);
+    ctx.closePath();ctx.fill();
+    // 袋のメッシュ
+    ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=0.6;
+    for(let i=1;i<=3;i++){const yy=-r*0.5*i;ctx.beginPath();ctx.moveTo(-r*(1-i*0.2),yy*0.7);ctx.lineTo(r*(1-i*0.2),yy*0.7);ctx.stroke();}
+    for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(r*i/2.2,0);ctx.lineTo(r*i/3,-r*1.4);ctx.stroke();}
+    // 金属枠
+    ctx.strokeStyle='#d0d0d0';ctx.lineWidth=2.4;
+    ctx.beginPath();ctx.ellipse(0,0,r,r*.42,0,0,Math.PI*2);ctx.stroke();
+
+  } else if(phase==='hold'){
+    // 被せた状態: カブトムシをドーム状の網で覆う
+    const bx=targetBeetle?targetBeetle.x:x;
+    const by=targetBeetle?targetBeetle.y:y;
+    const r=(targetBeetle?targetBeetle.size*.95:30);
+    ctx.translate(bx,by);
+    // 暴れる揺れ
+    const shake=Math.sin(t*0.055)*4;
+    ctx.translate(shake,0);
+    // 柄（右上へ伸びる）
+    ctx.strokeStyle='#9a6b2e';ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(r*.5,-r*.3);ctx.lineTo(r*.5+30,-r*.3-34);ctx.stroke();
+    // 網ドーム（カブトムシを上から覆う半透明の袋）
+    ctx.fillStyle='rgba(255,255,255,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(0,-r*0.1,r,r*1.05,0,Math.PI,0);
+    ctx.closePath();ctx.fill();
+    // 地面の接地楕円
+    ctx.strokeStyle='#d0d0d0';ctx.lineWidth=2.4;
+    ctx.beginPath();ctx.ellipse(0,0,r,r*.42,0,0,Math.PI*2);ctx.stroke();
+    // ドームのメッシュ（縦）
+    ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=0.7;
+    for(let i=-2;i<=2;i++){
+      ctx.beginPath();ctx.ellipse(0,-r*0.1,Math.abs(r*i/2.5),r*1.05,0,Math.PI,0);ctx.stroke();
+    }
+    // ドームのメッシュ（横）
+    for(let i=1;i<=3;i++){
+      const ry=r*1.05*i/4;
+      ctx.beginPath();ctx.ellipse(0,-r*0.1-ry*0.3,r*Math.cos(Math.asin(i/4)),ry*0.42,0,0,Math.PI*2);ctx.stroke();
+    }
+    // 暴れフラッシュ
+    if(Math.sin(t*0.06)>0.38){
+      ctx.strokeStyle='rgba(255,80,80,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.ellipse(0,0,r*1.1,r*.5,0,0,Math.PI*2);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+  } else if(phase==='success'){
+    // 捕獲成功: 網が光りながら消える
+    const bx=targetBeetle?targetBeetle.x:x;
+    const by=targetBeetle?targetBeetle.y:y;
+    const r=(targetBeetle?targetBeetle.size*.88:30)*(1+progress*.5);
+    ctx.globalAlpha=1-progress;
+    ctx.translate(bx,by);
+    ctx.strokeStyle='#FFD700';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.ellipse(0,0,r,r*.62,0,0,Math.PI*2);ctx.stroke();
+    // キラキラ
+    for(let i=0;i<6;i++){
+      const ang=i/6*Math.PI*2+progress*3;
+      const dr=r*(1+progress*.8);
+      ctx.fillStyle='rgba(255,215,0,0.8)';
+      ctx.beginPath();ctx.arc(Math.cos(ang)*dr,Math.sin(ang)*dr*.62,3*(1-progress),0,Math.PI*2);ctx.fill();
+    }
+
+  } else if(phase==='fail'){
+    // 失敗: 網が弾かれる
+    const bx=targetBeetle?targetBeetle.x:x;
+    const by=targetBeetle?targetBeetle.y:y;
+    const r=(targetBeetle?targetBeetle.size*.88:30);
+    ctx.globalAlpha=(1-progress)*.8;
+    ctx.translate(bx+progress*80,by-progress*40);ctx.rotate(progress*1.2);
+    ctx.strokeStyle='rgba(255,100,100,0.8)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(0,0,r,r*.62,0,0,Math.PI*2);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════
+// MASH UI (canvas内)
+// ══════════════════════════════════════════════
+function drawMashUI(ctx,b,t){
+  if(!mash)return;
+  const {x,y,size}=b;
+  const bw=Math.max(size*2.6,110);
+  const bx=Math.max(8,Math.min(x-bw/2,W-bw-8));
+  const by=Math.max(8,y-size-55);
+  ctx.save();
+  ctx.fillStyle='rgba(5,5,18,0.92)';
+  ctx.beginPath();ctx.roundRect(bx,by,bw,50,8);ctx.fill();
+  ctx.strokeStyle='rgba(127,119,221,0.5)';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(10,size*.21)}px sans-serif`;ctx.textAlign='center';
+  ctx.fillText('連打！',bx+bw/2,by+13);
+  const pct=Math.min(1,mash.prog/mash.req);
+  const bpx=bx+8,bpy=by+18,bpw=bw-16;
+  ctx.fillStyle='rgba(255,255,255,0.07)';ctx.beginPath();ctx.roundRect(bpx,bpy,bpw,8,4);ctx.fill();
+  ctx.fillStyle=pct>.7?'#5DCAA5':pct>.35?'#EF9F27':'#AFA9EC';
+  ctx.beginPath();ctx.roundRect(bpx,bpy,bpw*pct,8,4);ctx.fill();
+  const tpct=Math.max(0,mash.timeLeft/2500);
+  ctx.fillStyle='rgba(255,255,255,0.05)';ctx.beginPath();ctx.roundRect(bpx,by+30,bpw,4,2);ctx.fill();
+  ctx.fillStyle=tpct>.4?'rgba(255,255,255,0.4)':'rgba(226,75,74,0.85)';
+  ctx.beginPath();ctx.roundRect(bpx,by+30,bpw*tpct,4,2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font=`${Math.max(9,size*.18)}px sans-serif`;
+  ctx.fillText(`あと${Math.max(0,mash.req-mash.prog)}回 / タップ or スペース`,bx+bw/2,by+46);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════
+// UPDATE
+// ══════════════════════════════════════════════
+function update(t){
+  // ジョイスティックの入力を反映
+  applyJoystick();
+  // プレイヤー移動（ジョイスティックの移動ベクトル）
+  player.x=Math.max(20,Math.min(WORLD_W-20,player.x+moveVec.x));
+  player.y=Math.max(20,Math.min(WORLD_H-20,player.y+moveVec.y));
+  if(Math.hypot(moveVec.x,moveVec.y)>0.3){
+    player.angle=Math.atan2(moveVec.y,moveVec.x)-Math.PI/2;
+    playerStep++;
+  }
+
+  // カメラをプレイヤーに追従
+  updateCamera();
+
+  // beetles
+  beetles.forEach(b=>{
+    if(mash&&mash.beetle===b){b.fleeing=false;return;}
+    // 扇形視野でプレイヤーを検出
+    const spotted=inVision(b,player.x,player.y);
+    if(spotted){
+      b.fleeing=true;
+      const ang=Math.atan2(b.y-player.y,b.x-player.x);
+      const fs=b.speed*2.2;
+      b.vx=b.vx*.5+Math.cos(ang)*fs*.5;
+      b.vy=b.vy*.5+Math.sin(ang)*fs*.5;
+    } else {
+      b.fleeing=false;
+      b.vx*=.978;b.vy*=.978;
+      if(Math.abs(b.vx)<b.speed*.2)b.vx+=(Math.random()-.5)*b.speed*.5;
+      if(Math.abs(b.vy)<b.speed*.2)b.vy+=(Math.random()-.5)*b.speed*.5;
+    }
+    // 向き更新
+    if(Math.hypot(b.vx,b.vy)>0.05)b.angle=Math.atan2(b.vy,b.vx);
+    // 視線をキョロキョロ動かす
+    b.eyeTimer++;
+    b.eyeAngle+=b.eyeSpeed;
+    // 一定時間で急にキョロっと向きを変える
+    if(b.eyeTimer>80+Math.random()*60){
+      b.eyeTimer=0;
+      b.eyeSpeed=(Math.random()-0.5)*0.02;
+    }
+    b.x+=b.vx;b.y+=b.vy;
+    const pad=b.size+5;
+    if(b.x<pad){b.x=pad;b.vx=Math.abs(b.vx);}
+    if(b.x>WORLD_W-pad){b.x=WORLD_W-pad;b.vx=-Math.abs(b.vx);}
+    if(b.y<pad){b.y=pad;b.vy=Math.abs(b.vy);}
+    if(b.y>WORLD_H-pad){b.y=WORLD_H-pad;b.vy=-Math.abs(b.vy);}
+    b.wobble+=.017;
+  });
+
+  // 網アニメ更新
+  if(netSwing){
+    if(netSwing.phase==='swing'){
+      netSwing.progress=Math.min(1,netSwing.progress+0.055);
+      if(netSwing.progress>=1){
+        // 被せた瞬間：土埃
+        const tb=netSwing.targetBeetle;
+        spawnParticles(tb.x,tb.y+tb.size*0.4,'rgba(150,130,90,0.7)',10,{spd:3,life:25,size:5,grav:0.05});
+        const req=captureDiff(netSwing.targetBeetle.data);
+        if(req<=2){
+          netSwing.phase='success';netSwing.progress=0;
+          setTimeout(()=>captureSuccess(netSwing.targetBeetle),600);
+        } else {
+          netSwing.phase='hold';netSwing.progress=0;
+          startMash(netSwing.targetBeetle,req);
+        }
+      }
+    } else if(netSwing.phase==='success'){
+      netSwing.progress=Math.min(1,netSwing.progress+0.04);
+      if(netSwing.progress>=1)netSwing=null;
+    } else if(netSwing.phase==='fail'){
+      netSwing.progress=Math.min(1,netSwing.progress+0.05);
+      if(netSwing.progress>=1)netSwing=null;
+    }
+  }
+
+  // 演出の更新
+  updateParticles();
+  if(screenFlash>0)screenFlash=Math.max(0,screenFlash-0.06);
+  if(captureFx){
+    captureFx.t++;
+    if(captureFx.t>captureFx.dur)captureFx=null;
+  }
+}
+
+// 捕獲成功の全画面演出を描く
+function drawCaptureFx(ctx){
+  const fx=captureFx;
+  const p=fx.t/fx.dur; // 0〜1
+  ctx.save();
+  ctx.textAlign='center';
+  // ポップインしてから少し上へ抜ける
+  const pop=p<0.2?p/0.2:1;
+  const scale=pop<1?0.5+pop*0.5*1.1:1.05-0.05*((p-0.2)/0.8);
+  const cy=H*0.32-(p>0.7?(p-0.7)/0.3*30:0);
+  const alpha=p>0.8?1-(p-0.8)/0.2:1;
+  ctx.globalAlpha=alpha;
+  // レア帯
+  if(fx.rare){
+    ctx.save();ctx.translate(W/2,cy);ctx.scale(scale,scale);
+    // 虹色リング
+    for(let i=0;i<3;i++){
+      ctx.globalAlpha=alpha*(0.3-i*0.08);
+      ctx.strokeStyle=`hsl(${(fx.t*4+i*120)%360},80%,60%)`;
+      ctx.lineWidth=4;
+      ctx.beginPath();ctx.arc(0,0,70+i*16+Math.sin(fx.t*0.1)*4,0,Math.PI*2);ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha=alpha;
+  }
+  // バッジ
+  ctx.save();ctx.translate(W/2,cy);ctx.scale(scale,scale);
+  ctx.fillStyle=fx.rare?'#E0A82E':'#5DCAA5';
+  ctx.font='bold 30px sans-serif';
+  ctx.fillText(fx.rare?'★ レア捕獲！ ★':'✓ GET!',0,-8);
+  ctx.fillStyle='#fff';
+  ctx.font='bold 22px sans-serif';
+  ctx.fillText(fx.name,0,24);
+  if(fx.desc){
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.font='13px sans-serif';
+    ctx.fillText(fx.desc,0,48);
+  }
+  ctx.restore();
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════
+function render(t){
+  const ctx=gameCv.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  // ── ワールド座標で描画（ズーム＋カメラ）──
+  ctx.save();
+  ctx.translate(W/2,H/2);
+  ctx.scale(cam.zoom,cam.zoom);
+  ctx.translate(-cam.cx,-cam.cy);
+
+  // 画面に映るワールド範囲（ズーム考慮）
+  const halfW=(W/2)/cam.zoom, halfH=(H/2)/cam.zoom;
+  const onScreen=(x,y,m=120)=>x>cam.cx-halfW-m&&x<cam.cx+halfW+m&&y>cam.cy-halfH-m&&y<cam.cy+halfH+m;
+
+  // 扇形視野の可視化
+  beetles.forEach(b=>{
+    if(mash&&mash.beetle===b)return;
+    if(!onScreen(b.x,b.y,b.visionR))return;
+    const spotted=inVision(b,player.x,player.y);
+    ctx.save();
+    ctx.globalAlpha=spotted?0.08:0.03;
+    ctx.fillStyle=spotted?'#ff6666':'#aaffaa';
+    ctx.translate(b.x,b.y);
+    ctx.rotate(b.eyeAngle-Math.PI/2);
+    ctx.beginPath();ctx.moveTo(0,0);
+    ctx.arc(0,0,b.visionR,-b.visionAng,b.visionAng);
+    ctx.closePath();ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha=spotted?0.6:0.25;
+    ctx.fillStyle=spotted?'#ff4444':'#88ff88';
+    const eyeX=b.x+Math.cos(b.eyeAngle)*b.visionR*0.55;
+    const eyeY=b.y+Math.sin(b.eyeAngle)*b.visionR*0.55;
+    ctx.beginPath();ctx.arc(eyeX,eyeY,4,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  });
+
+  // beetles（ピン留め以外）
+  beetles.forEach(b=>{
+    if(mash&&mash.beetle===b)return;
+    if(!onScreen(b.x,b.y))return;
+    drawOneBeetle(ctx,b.x,b.y,b.size,b.data.color,b.data.stroke,b.glow,b.hornLen,b.fleeing,b.wobble,t,false,b.angle);
+    ctx.save();ctx.font=`${Math.max(9,Math.min(11,b.size*.19))}px sans-serif`;ctx.textAlign='center';
+    const lw=ctx.measureText(b.data.name).width+8;
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(b.x-lw/2,b.y+b.size*.72,lw,14);
+    ctx.fillStyle='#fff';ctx.fillText(b.data.name,b.x,b.y+b.size*.72+10);ctx.restore();
+  });
+
+  // 網アニメ
+  drawNetSwing(ctx,t);
+
+  // ピン留めbeetle
+  if(mash){
+    const b=mash.beetle;
+    drawOneBeetle(ctx,b.x,b.y,b.size,b.data.color,b.data.stroke,b.glow,b.hornLen,false,b.wobble,t,true,b.angle);
+    ctx.save();ctx.font=`${Math.max(9,Math.min(11,b.size*.19))}px sans-serif`;ctx.textAlign='center';
+    const lw2=ctx.measureText(b.data.name).width+8;
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(b.x-lw2/2,b.y+b.size*.72,lw2,14);
+    ctx.fillStyle='#fff';ctx.fillText(b.data.name,b.x,b.y+b.size*.72+10);ctx.restore();
+    drawMashUI(ctx,b,t);
+  }
+
+  drawPlayer(ctx,t);
+
+  // パーティクル（ワールド座標）
+  drawParticles(ctx);
+
+  ctx.restore();
+  // ── ワールド描画ここまで ──
+
+  // 画面フラッシュ
+  if(screenFlash>0){
+    ctx.save();
+    ctx.globalAlpha=screenFlash*0.6;
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
+  // 捕獲成功の全画面演出
+  if(captureFx){
+    drawCaptureFx(ctx);
+  }
+
+  // ジョイスティックUI（画面固定）
+  if(joy.active&&joy.moved){
+    const dx=joy.cx-joy.ox, dy=joy.cy-joy.oy;
+    const d=Math.hypot(dx,dy);
+    const clamped=Math.min(d,JOY_MAX);
+    const nx=d>0?dx/d:0, ny=d>0?dy/d:0;
+    const stickX=joy.ox+nx*clamped, stickY=joy.oy+ny*clamped;
+    ctx.save();
+    // 外枠（起点）
+    ctx.globalAlpha=0.25;
+    ctx.fillStyle='#000';
+    ctx.beginPath();ctx.arc(joy.ox,joy.oy,JOY_MAX,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=0.5;
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(joy.ox,joy.oy,JOY_MAX,0,Math.PI*2);ctx.stroke();
+    // スティック（現在位置）
+    ctx.globalAlpha=0.7;
+    ctx.fillStyle='#8FC04C';
+    ctx.beginPath();ctx.arc(stickX,stickY,26,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // ズーム倍率インジケータ
+  if(Math.abs(cam.zoom-1)>0.02){
+    ctx.save();
+    ctx.globalAlpha=0.7;
+    ctx.fillStyle='rgba(0,0,0,0.6)';
+    ctx.beginPath();ctx.roundRect(14,H-40,72,26,6);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='12px sans-serif';ctx.textAlign='left';
+    ctx.fillText(`🔍 ${cam.zoom.toFixed(1)}x`,24,H-22);
+    ctx.restore();
+  }
+
+  // ミニマップ（画面右下に固定）
+  drawMinimap(ctx);
+}
+
+// ミニマップ：フィールド全体と自分・カブトムシの位置
+function drawMinimap(ctx){
+  const mw=150, mh=mw*(WORLD_H/WORLD_W); // 縦横比維持
+  const mx=W-mw-14, my=H-mh-14;
+  ctx.save();
+  // 背景
+  ctx.globalAlpha=0.82;
+  ctx.fillStyle='#0a160a';
+  ctx.beginPath();ctx.roundRect(mx,my,mw,mh,6);ctx.fill();
+  ctx.strokeStyle='rgba(143,192,76,0.5)';ctx.lineWidth=1;ctx.stroke();
+  ctx.globalAlpha=1;
+  const sx=mw/WORLD_W, sy=mh/WORLD_H;
+  // カブトムシ（色付きの点）
+  beetles.forEach(b=>{
+    ctx.fillStyle=b.data.color;
+    ctx.beginPath();ctx.arc(mx+b.x*sx,my+b.y*sy,1.8,0,Math.PI*2);ctx.fill();
+  });
+  // 現在のカメラ範囲（白い枠・ズーム考慮）
+  const viewW=W/cam.zoom, viewH=H/cam.zoom;
+  ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1;
+  ctx.strokeRect(mx+(cam.cx-viewW/2)*sx,my+(cam.cy-viewH/2)*sy,viewW*sx,viewH*sy);
+  // プレイヤー（白丸）
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(mx+player.x*sx,my+player.y*sy,2.6,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function loop(t){
+  if(document.getElementById('field-screen').classList.contains('active')){update(t);drawFieldBg();render(t);}
+  requestAnimationFrame(loop);
+}
+
+// ══════════════════════════════════════════════
+// THROW NET
+// ══════════════════════════════════════════════
+function throwNet(beetle){
+  netSwing={phase:'swing',progress:0,x:beetle.x,y:beetle.y,targetBeetle:beetle};
+}
+
+const MASH_TIME=2500;
+function startMash(beetle,req){
+  mash={beetle,req,prog:0,timeLeft:MASH_TIME};
+  mash.countdown=setInterval(()=>{
+    if(!mash)return;
+    mash.timeLeft-=50;
+    if(mash.timeLeft<=0){clearInterval(mash.countdown);mashFail();}
+  },50);
+}
+function doMash(){
+  if(!mash)return;
+  mash.prog++;
+  mash.timeLeft=Math.min(mash.timeLeft+100,MASH_TIME);
+  if(netSwing&&netSwing.phase==='hold'&&netSwing.targetBeetle){
+    // 網が揺れる
+    netSwing.targetBeetle.x+=(Math.random()-.5)*8;
+    netSwing.targetBeetle.y+=(Math.random()-.5)*8;
+  }
+  if(mash.prog>=mash.req){
+    clearInterval(mash.countdown);
+    const b=mash.beetle;mash=null;
+    if(netSwing)netSwing.phase='success',netSwing.progress=0;
+    setTimeout(()=>captureSuccess(b),620);
+  }
+}
+function mashFail(){
+  if(!mash)return;
+  const b=mash.beetle;mash=null;
+  if(netSwing)netSwing.phase='fail',netSwing.progress=0;
+  const ang=Math.random()*Math.PI*2;
+  b.vx=Math.cos(ang)*b.speed*5;b.vy=Math.sin(ang)*b.speed*5;
+  showMsg(`${b.data.name} に逃げられた！`,2200);
+}
+function captureSuccess(beetle){
+  if(netSwing&&netSwing.targetBeetle===beetle)netSwing=null;
+  const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const diff=captureDiff(beetle.data);
+  const rare=diff>=9; // 捕獲難易度が高い＝レア
+  const bx=beetle.x, by=beetle.y;
+
+  // 株を1株購入＝株価ぶん保有資産を消費
+  const buyPrice=beetle.data.price;
+  playerAsset-=buyPrice;
+  updateAssetHUD();
+
+  // パーティクル演出
+  spawnParticles(bx,by,beetle.data.color,rare?28:16,{spd:rare?6:4,life:rare?55:38,size:rare?5:4,shape:'circle'});
+  if(rare){
+    for(let k=0;k<20;k++){
+      const hue=(k*30)%360;
+      spawnParticles(bx,by,`hsl(${hue},85%,62%)`,1,{spd:7,life:60,size:6,shape:'star',grav:0.05});
+    }
+    screenFlash=1;
+  } else {
+    screenFlash=0.5;
+  }
+
+  beetles=beetles.filter(b=>b!==beetle);
+  // buyPrice=買値、curPrice=現在価格（変動する）。priceHistoryは買値を起点に生成
+  caught.push({...beetle.data,capturedAt:today,sizeBonus:0,buyPrice,curPrice:buyPrice,priceHistory:genPriceHistory(beetle.data,buyPrice)});
+  document.getElementById('hud-count').textContent=caught.length+'匹';
+  document.getElementById('nav-count').textContent=`(${caught.length})`;
+  saveProgress();
+
+  captureFx={t:0,dur:rare?110:80,name:beetle.data.name,desc:COMPANY_DESC[beetle.data.name]||'',color:beetle.data.color,rare,price:buyPrice};
+}
+function updateAssetHUD(){
+  const el=document.getElementById('asset-val');
+  if(el)el.textContent='¥'+Math.round(playerAsset).toLocaleString();
+}
+// 企業の一言解説（捕獲時に表示して学べる）
+const COMPANY_DESC={
+  'トヨタ':'世界販売台数トップ級の自動車メーカー',
+  'ソフトバンク':'通信とAI投資を手がける巨大企業',
+  '三菱UFJ':'日本最大級のメガバンク',
+  '任天堂':'マリオを生んだゲーム会社',
+  'キーエンス':'高収益で知られるセンサー大手',
+  'ファーストリテ':'ユニクロを展開する小売大手',
+  'NTT':'日本最大の通信インフラ企業',
+  'ホンダ':'二輪・四輪の世界的メーカー',
+  'エーザイ':'認知症治療薬で知られる製薬会社',
+  '楽天':'EC・金融・通信を手がけるIT企業',
+};
+function genPriceHistory(c,base){
+  base=base||c.price; const arr=[base];
+  for(let i=1;i<30;i++)arr.push(arr[i-1]*(1+(Math.random()-.48)*c.beta*.028));
+  return arr;
+}
+
+// ══════════════════════════════════════════════
+// INPUT — ジョイスティック式移動 + ピンチズーム
+// 指を触れた地点が「起点」、そこから動かした方向にキャラが進み続ける
+// ══════════════════════════════════════════════
+let holdTimer=null,lastTap=0;
+// ジョイスティック状態
+let joy={active:false, ox:0, oy:0, cx:0, cy:0, moved:false};
+const JOY_MAX=70;       // スティックの最大振れ幅(px)
+const JOY_DEAD=8;       // この距離以下は動かない（タップ誤爆防止）
+const MOVE_SPEED=5.2;   // 最大速度
+// ピンチ状態
+let pinch={active:false, startDist:0, startZoom:1};
+
+function localXY(clientX,clientY){
+  const r=fieldEl.getBoundingClientRect();
+  return {x:clientX-r.left, y:clientY-r.top};
+}
+function touchDist(t1,t2){
+  return Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY);
+}
+
+// ── 移動ベクトルを毎フレーム適用するための値 ──
+let moveVec={x:0,y:0};
+function applyJoystick(){
+  if(!joy.active){moveVec.x*=0.8;moveVec.y*=0.8;return;}
+  const dx=joy.cx-joy.ox, dy=joy.cy-joy.oy;
+  const d=Math.hypot(dx,dy);
+  if(d<JOY_DEAD){moveVec.x=0;moveVec.y=0;return;}
+  const clamped=Math.min(d,JOY_MAX);
+  const ratio=clamped/JOY_MAX; // 0〜1
+  const nx=dx/d, ny=dy/d;
+  moveVec.x=nx*ratio*MOVE_SPEED;
+  moveVec.y=ny*ratio*MOVE_SPEED;
+}
+
+// ───────── マウス（PC）─────────
+fieldEl.addEventListener('mousedown',e=>{
+  if(mash)return;
+  const p=localXY(e.clientX,e.clientY);
+  joy.active=true;joy.moved=false;
+  joy.ox=joy.cx=p.x;joy.oy=joy.cy=p.y;
+  // 長押し判定
+  const w=screenToWorld(p.x,p.y);
+  const b=beetles.find(b=>dist(w.x,w.y,b.x,b.y)<b.size+18);
+  if(b)holdTimer=setTimeout(()=>showDetail(b),500);
+});
+fieldEl.addEventListener('mousemove',e=>{
+  if(mash||!joy.active)return;
+  const p=localXY(e.clientX,e.clientY);
+  joy.cx=p.x;joy.cy=p.y;
+  if(Math.hypot(p.x-joy.ox,p.y-joy.oy)>JOY_DEAD){joy.moved=true;clearTimeout(holdTimer);}
+});
+window.addEventListener('mouseup',()=>{
+  joy.active=false;clearTimeout(holdTimer);hideDetail();
+});
+
+// ホイールでズーム（PC）
+fieldEl.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const delta=e.deltaY>0?-0.12:0.12;
+  cam.zoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,cam.zoom+delta));
+},{passive:false});
+
+// ダブルクリックで網（PC）
+fieldEl.addEventListener('dblclick',e=>{
+  if(mash)return;
+  clearTimeout(holdTimer);hideDetail();
+  tryThrowNearest();
+});
+
+// クリックでマッシュ（PC）
+fieldEl.addEventListener('click',()=>{if(mash)doMash();});
+
+// ───────── タッチ（スマホ）─────────
+fieldEl.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(mash){doMash();return;}
+  if(e.touches.length===2){
+    // ピンチ開始
+    pinch.active=true;
+    pinch.startDist=touchDist(e.touches[0],e.touches[1]);
+    pinch.startZoom=cam.zoom;
+    joy.active=false; // 移動は止める
+    clearTimeout(holdTimer);
+    return;
+  }
+  const p=localXY(e.touches[0].clientX,e.touches[0].clientY);
+  joy.active=true;joy.moved=false;
+  joy.ox=joy.cx=p.x;joy.oy=joy.cy=p.y;
+  // ダブルタップで網
+  const now=Date.now();
+  if(now-lastTap<300){
+    lastTap=0;
+    tryThrowNearest();
+  } else {
+    lastTap=now;
+    const w=screenToWorld(p.x,p.y);
+    const b=beetles.find(b=>dist(w.x,w.y,b.x,b.y)<b.size+22);
+    if(b)holdTimer=setTimeout(()=>showDetail(b),500);
+  }
+},{passive:false});
+fieldEl.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(mash)return;
+  if(pinch.active&&e.touches.length===2){
+    const d=touchDist(e.touches[0],e.touches[1]);
+    const ratio=d/pinch.startDist;
+    cam.zoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,pinch.startZoom*ratio));
+    return;
+  }
+  if(joy.active&&e.touches.length===1){
+    const p=localXY(e.touches[0].clientX,e.touches[0].clientY);
+    joy.cx=p.x;joy.cy=p.y;
+    if(Math.hypot(p.x-joy.ox,p.y-joy.oy)>JOY_DEAD){joy.moved=true;clearTimeout(holdTimer);}
+  }
+},{passive:false});
+fieldEl.addEventListener('touchend',e=>{
+  if(e.touches.length===0){
+    joy.active=false;pinch.active=false;
+    clearTimeout(holdTimer);hideDetail();
+  } else if(e.touches.length===1){
+    // ピンチ解除後、残った指で移動再開
+    pinch.active=false;
+    const p=localXY(e.touches[0].clientX,e.touches[0].clientY);
+    joy.active=true;joy.ox=joy.cx=p.x;joy.oy=joy.cy=p.y;
+  }
+},{passive:false});
+
+// 最も近いカブトムシに網を投げる
+function tryThrowNearest(){
+  let closest=null,minD=Infinity;
+  beetles.forEach(b=>{const d=dist(player.x,player.y,b.x,b.y);if(d<minD){minD=d;closest=b;}});
+  if(!closest){showMsg('カブトムシが見当たらない...');return;}
+  if(minD>closest.size+70){showMsg('もっと近づいて！');return;}
+  // 資産チェック（1株買えるか）
+  if(playerAsset<closest.data.price){
+    showMsg(`資産不足！${closest.data.name}は¥${closest.data.price.toLocaleString()}。虫カゴで株を売って資金を作ろう`,3000);
+    return;
+  }
+  throwNet(closest);
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&mash){e.preventDefault();doMash();}
+  if(e.code==='Escape'&&mash){clearInterval(mash.countdown);mashFail();}
+});
+
+function showDetail(b){
+  const pop=document.getElementById('detail-popup');
+  document.getElementById('dp-name').textContent=`${b.data.name}（${b.data.sector}）`;
+  document.getElementById('dp-cap').textContent=b.data.cap+'兆円';
+  document.getElementById('dp-beta').textContent=b.data.beta;
+  document.getElementById('dp-roe').textContent=b.data.roe+'%';
+  document.getElementById('dp-per').textContent=b.data.per+'倍';
+  document.getElementById('dp-div').textContent=b.data.divYield+'%';
+  document.getElementById('dp-diff').textContent=captureDiff(b.data)+'回';
+  pop.style.display='block';
+  // ワールド座標→スクリーン座標に変換して配置
+  const sc=worldToScreen(b.x,b.y);
+  const sx=sc.x, sy=sc.y;
+  let px=sx+b.size*cam.zoom+10,py=sy-50;
+  if(px+220>W)px=sx-235;
+  if(px<8)px=8;
+  if(py<8)py=8;if(py+200>H)py=H-200;
+  pop.style.left=px+'px';pop.style.top=py+'px';
+}
+function hideDetail(){document.getElementById('detail-popup').style.display='none';}
+function showMsg(txt,dur=2200){
+  const el=document.getElementById('msg');el.textContent=txt;el.style.opacity=1;
+  clearTimeout(showMsg._t);showMsg._t=setTimeout(()=>el.style.opacity=0,dur);
+}
+
+// ══════════════════════════════════════════════
+// SCREEN SWITCH
+// ══════════════════════════════════════════════
+function switchScreen(name,btn){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(name+'-screen').classList.add('active');
+  btn.classList.add('active');
+  if(name==='cage')renderCageScreen();
+}
+
+// ══════════════════════════════════════════════
+// CAGE
+// ══════════════════════════════════════════════
+let selectedIdx=null,cageStates=[],cageRAF=null;
+
+function renderCageScreen(){
+  // 株価を少し変動させる（開くたびに動く＝相場の変化を体感）
+  caught.forEach(c=>{
+    const last=c.priceHistory[c.priceHistory.length-1];
+    const next=last*(1+(Math.random()-0.48)*c.beta*0.04);
+    c.priceHistory.push(Math.max(1,next));
+    if(c.priceHistory.length>40)c.priceHistory.shift();
+    c.curPrice=c.priceHistory[c.priceHistory.length-1];
+  });
+  if(caught.length)saveProgress();
+  updatePortfolio();buildCageList();initCageCanvas();
+}
+function updatePortfolio(){
+  // 現金は常に表示
+  document.getElementById('pf-cash').textContent='¥'+Math.round(playerAsset).toLocaleString();
+
+  if(!caught.length){
+    document.getElementById('cage-empty').style.display='flex';
+    document.getElementById('pf-total').textContent='¥0';
+    document.getElementById('pf-change').textContent='株なし';
+    document.getElementById('pf-change').className='pf-sub';
+    document.getElementById('pf-pl').textContent='¥0';
+    document.getElementById('pf-pl').className='pf-value';
+    document.getElementById('pf-pl-pct').textContent='買値との差';
+    document.getElementById('pf-net').textContent='¥'+Math.round(playerAsset).toLocaleString();
+    const d0=playerAsset-START_ASSET;
+    document.getElementById('pf-net-sub').textContent=(d0>=0?'+':'')+Math.round(d0).toLocaleString()+' / スタート比';
+    return;
+  }
+  document.getElementById('cage-empty').style.display='none';
+
+  // 株の現在時価合計（priceHistoryの最新値＝現在株価）と買値合計
+  let stockValue=0, costValue=0;
+  caught.forEach(c=>{
+    const cur=c.priceHistory[c.priceHistory.length-1];
+    c.curPrice=cur;
+    stockValue+=cur;
+    costValue+=(c.buyPrice||c.price);
+  });
+  const pl=stockValue-costValue;          // 含み損益
+  const plPct=costValue>0?(pl/costValue*100):0;
+  const net=playerAsset+stockValue;       // 総合計
+  const netDiff=net-START_ASSET;          // スタートからの増減
+
+  // 虫カゴ総資産（株の時価）
+  document.getElementById('pf-total').textContent='¥'+Math.round(stockValue).toLocaleString();
+  document.getElementById('pf-change').textContent=caught.length+'銘柄を保有中';
+  document.getElementById('pf-change').className='pf-sub';
+
+  // 損益
+  const plEl=document.getElementById('pf-pl');
+  plEl.textContent=(pl>=0?'+¥':'-¥')+Math.abs(Math.round(pl)).toLocaleString();
+  plEl.className='pf-value '+(pl>=0?'up':'dn');
+  const plp=document.getElementById('pf-pl-pct');
+  plp.textContent=(pl>=0?'▲ +':'▼ ')+plPct.toFixed(1)+'%（買値比）';
+  plp.className='pf-sub '+(pl>=0?'up':'dn');
+
+  // 総合計
+  document.getElementById('pf-net').textContent='¥'+Math.round(net).toLocaleString();
+  const ns=document.getElementById('pf-net-sub');
+  ns.textContent=(netDiff>=0?'+':'')+Math.round(netDiff).toLocaleString()+' / スタート比';
+  ns.className='pf-sub '+(netDiff>=0?'up':'dn');
+}
+function buildCageList(){
+  const el=document.getElementById('cage-list');
+  if(!caught.length){el.innerHTML='<div class="cage-empty-msg">まだ虫を捕まえていません</div>';return;}
+  el.innerHTML=caught.map((c,i)=>{
+    const cur=c.priceHistory[c.priceHistory.length-1];
+    const buy=c.buyPrice||c.price;
+    const pct=((cur/buy-1)*100).toFixed(1),up=parseFloat(pct)>=0;
+    return `<div class="cage-item ${selectedIdx===i?'selected':''}" onclick="selectBeetle(${i})">
+      <canvas id="ci-${i}" width="64" height="64"></canvas>
+      <div class="cage-item-name">${c.name}</div>
+      <div class="cage-item-sub ${up?'up':'dn'}">${up?'▲':'▼'}${Math.abs(pct)}%</div>
+    </div>`;
+  }).join('');
+  caught.forEach((c,i)=>{
+    const cv=document.getElementById(`ci-${i}`);if(!cv)return;
+    const ctx=cv.getContext('2d');ctx.fillStyle='#0d180d';ctx.fillRect(0,0,64,64);
+    drawOneBeetle(ctx,32,34,22,c.color,c.stroke,beetleGlow(c),beetleHornLen(c),false,i*.8,0,false,-Math.PI/2);
+  });
+}
+function selectBeetle(i){selectedIdx=i;buildCageList();showCageDetail(caught[i]);}
+function showCageDetail(c){
+  document.getElementById('cage-detail').classList.add('active');
+  document.getElementById('cd-name').textContent=c.name;
+  document.getElementById('cd-sec').textContent=c.sector+' / '+c.ticker;
+  const cur=c.priceHistory[c.priceHistory.length-1];
+  const buy=c.buyPrice||c.price;
+  const pct=((cur/buy-1)*100).toFixed(2),up=parseFloat(pct)>=0;
+  // ヘッダーは現在株価
+  document.getElementById('cd-price').textContent='¥'+Math.round(cur).toLocaleString();
+  document.getElementById('cd-chg').textContent=(up?'▲ +':'▼ ')+pct+'%';
+  document.getElementById('cd-chg').className=up?'up':'dn';
+  // 買値・現在値・損益
+  document.getElementById('cds-buy').textContent='¥'+Math.round(buy).toLocaleString();
+  document.getElementById('cds-cur').textContent='¥'+Math.round(cur).toLocaleString();
+  const pl=cur-buy;
+  const plEl=document.getElementById('cds-pl');
+  plEl.textContent=(pl>=0?'+':'-')+'¥'+Math.abs(Math.round(pl)).toLocaleString();
+  plEl.style.color=pl>=0?'#5DCAA5':'#E24B4A';
+  // 指標
+  document.getElementById('cds-cap').textContent=c.cap+'兆';
+  document.getElementById('cds-beta').textContent=c.beta;
+  document.getElementById('cds-roe').textContent=c.roe+'%';
+  document.getElementById('cds-per').textContent=c.per+'倍';
+  document.getElementById('cds-div').textContent=c.divYield+'%';
+  const icv=document.getElementById('cd-icon'),ictx=icv.getContext('2d');
+  ictx.fillStyle='#0d180d';ictx.fillRect(0,0,56,56);
+  drawOneBeetle(ictx,28,32,22,c.color,c.stroke,beetleGlow(c),beetleHornLen(c),false,0,0,false,-Math.PI/2);
+  drawMiniChart(c.priceHistory);
+}
+function drawMiniChart(history){
+  const cv=document.getElementById('cd-chart'),wrap=document.getElementById('cd-chart-wrap');
+  cv.width=wrap.offsetWidth;cv.height=wrap.offsetHeight;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,cv.width,cv.height);
+  const min=Math.min(...history),max=Math.max(...history),range=max-min||1;
+  const CW=cv.width,CH=cv.height,up=history[history.length-1]>=history[0];
+  const grad=ctx.createLinearGradient(0,0,0,CH);
+  grad.addColorStop(0,up?'rgba(93,202,165,0.28)':'rgba(226,75,74,0.28)');
+  grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grad;ctx.beginPath();ctx.moveTo(0,CH);
+  history.forEach((v,i)=>{const px=i/(history.length-1)*CW,py=CH-(v-min)/range*(CH-6)-3;i===0?ctx.lineTo(px,py):ctx.lineTo(px,py);});
+  ctx.lineTo(CW,CH);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=up?'#5DCAA5':'#E24B4A';ctx.lineWidth=1.5;ctx.beginPath();
+  history.forEach((v,i)=>{const px=i/(history.length-1)*CW,py=CH-(v-min)/range*(CH-6)-3;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);});
+  ctx.stroke();
+}
+function initCageCanvas(){
+  const wrap=document.getElementById('cage-canvas-wrap');
+  const cbg=document.getElementById('cage-bg'),ccv=document.getElementById('cage-cv');
+  const CW=wrap.offsetWidth,CH=wrap.offsetHeight;
+  cbg.width=ccv.width=CW;cbg.height=ccv.height=CH;
+  const bctx=cbg.getContext('2d');
+  bctx.fillStyle='#0a150a';bctx.fillRect(0,0,CW,CH);
+  bctx.strokeStyle='rgba(255,255,255,0.04)';bctx.lineWidth=1;
+  for(let x=0;x<CW;x+=28){bctx.beginPath();bctx.moveTo(x,0);bctx.lineTo(x,CH);bctx.stroke();}
+  bctx.fillStyle='rgba(35,18,3,0.35)';bctx.fillRect(0,CH-16,CW,16);
+  bctx.fillStyle='rgba(18,55,10,0.45)';bctx.fillRect(0,CH-20,CW,7);
+  cageStates=caught.map((c,i)=>({
+    c,x:55+Math.random()*(CW-110),y:40+Math.random()*(CH-90),
+    vx:(Math.random()-.5)*beetleSpeed(c)*.4,vy:(Math.random()-.5)*beetleSpeed(c)*.4,
+    wobble:i*.9,sizeBonus:0,divTimer:0,glowFlash:0,angle:Math.random()*Math.PI*2,
+  }));
+  if(cageRAF)cancelAnimationFrame(cageRAF);
+  function cageLoop(t){
+    if(!document.getElementById('cage-screen').classList.contains('active'))return;
+    const ctx=ccv.getContext('2d');ctx.clearRect(0,0,CW,CH);
+    cageStates.forEach(bs=>{
+      bs.x+=bs.vx;bs.y+=bs.vy;bs.vx*=.99;bs.vy*=.99;
+      if(Math.abs(bs.vx)<.1)bs.vx+=(Math.random()-.5)*.22;
+      if(Math.abs(bs.vy)<.1)bs.vy+=(Math.random()-.5)*.22;
+      if(Math.hypot(bs.vx,bs.vy)>.05)bs.angle=Math.atan2(bs.vy,bs.vx);
+      const sz=Math.max(16,beetleSize(bs.c)*.5+bs.sizeBonus);
+      const pad=sz+4;
+      if(bs.x<pad){bs.x=pad;bs.vx=Math.abs(bs.vx);}
+      if(bs.x>CW-pad){bs.x=CW-pad;bs.vx=-Math.abs(bs.vx);}
+      if(bs.y<pad){bs.y=pad;bs.vy=Math.abs(bs.vy);}
+      if(bs.y>CH-pad-18){bs.y=CH-pad-18;bs.vy=-Math.abs(bs.vy);}
+      bs.wobble+=.01;
+      if(bs.c.growth>0){bs.sizeBonus=Math.min(bs.sizeBonus+.0008,8);}
+      const di=dividendInterval(bs.c);
+      if(di!==Infinity){bs.divTimer++;if(bs.divTimer>di){bs.divTimer=0;bs.glowFlash=35;}}
+      if(bs.glowFlash>0){
+        bs.glowFlash--;
+        ctx.save();ctx.globalAlpha=(bs.glowFlash/35)*.75;
+        ctx.strokeStyle='#FFD700';ctx.lineWidth=2.5;
+        ctx.beginPath();ctx.arc(bs.x,bs.y,sz*1.5+((35-bs.glowFlash)/35)*sz*.7,0,Math.PI*2);ctx.stroke();
+        ctx.restore();
+      }
+      drawOneBeetle(ctx,bs.x,bs.y,sz,bs.c.color,bs.c.stroke,beetleGlow(bs.c),beetleHornLen(bs.c),false,bs.wobble,t,false,bs.angle);
+      ctx.save();ctx.font='9px sans-serif';ctx.textAlign='center';
+      const lw2=ctx.measureText(bs.c.name).width+6;
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(bs.x-lw2/2,bs.y+sz*.72,lw2,12);
+      ctx.fillStyle='#fff';ctx.fillText(bs.c.name,bs.x,bs.y+sz*.72+9);ctx.restore();
+    });
+    cageRAF=requestAnimationFrame(cageLoop);
+  }
+  cageRAF=requestAnimationFrame(cageLoop);
+}
+function releaseBeetle(){
+  if(selectedIdx===null)return;
+  const c=caught[selectedIdx];
+  const cur=Math.round(c.priceHistory[c.priceHistory.length-1]);
+  const buy=Math.round(c.buyPrice||c.price);
+  const pl=cur-buy;
+  if(!confirm(`${c.name}を売却しますか？\n買値 ¥${buy.toLocaleString()} → 現在値 ¥${cur.toLocaleString()}\n損益 ${pl>=0?'+':''}¥${pl.toLocaleString()}`))return;
+  // 現在株価で売却＝資産に戻る
+  playerAsset+=cur;
+  updateAssetHUD();
+  caught.splice(selectedIdx,1);cageStates.splice(selectedIdx,1);
+  selectedIdx=null;
+  document.getElementById('cage-detail').classList.remove('active');
+  document.getElementById('nav-count').textContent=`(${caught.length})`;
+  document.getElementById('hud-count').textContent=caught.length+'匹';
+  // 売った株はフィールドに戻す
+  const nc=COMPANIES.find(x=>x.name===c.name);
+  if(nc){const ang=Math.random()*Math.PI*2;const spd=beetleSpeed(nc);
+    beetles.push({data:nc,x:80+Math.random()*(W-160),y:80+Math.random()*(H-160),vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,angle:ang,size:beetleSize(nc),speed:spd,visionR:beetleVisionR(nc),visionAng:beetleVisionAng(nc),glow:beetleGlow(nc),hornLen:beetleHornLen(nc),fleeing:false,wobble:Math.random()*Math.PI*2,eyeAngle:Math.random()*Math.PI*2,eyeSpeed:(Math.random()-0.5)*0.012,eyeTimer:0});}
+  saveProgress();
+  updatePortfolio();buildCageList();
+  showMsg(`${c.name}を¥${cur.toLocaleString()}で売却（損益${pl>=0?'+':''}¥${pl.toLocaleString()}）`,3000);
+  saveProgress();
+}
+function openBroker(){
+  if(selectedIdx===null)return;
+  alert(`${caught[selectedIdx].name}（${caught[selectedIdx].ticker}）\n実装時は証券会社ページへ遷移します`);
+}
+
+// ══════════════════════════════════════════════
+// データ保存（localStorage）
+// ══════════════════════════════════════════════
+const SAVE_KEY='kabumushi_save_v2';
+function saveProgress(){
+  try{
+    const data={
+      asset:playerAsset,
+      caught:caught.map(c=>({name:c.name,capturedAt:c.capturedAt,buyPrice:c.buyPrice,
+        priceHistory:c.priceHistory.map(v=>Math.round(v))})),
+    };
+    localStorage.setItem(SAVE_KEY,JSON.stringify(data));
+  }catch(e){/* 保存不可環境では無視 */}
+}
+function loadProgress(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw)return;
+    const data=JSON.parse(raw);
+    if(typeof data.asset==='number')playerAsset=data.asset;
+    caught=(data.caught||[]).map(d=>{
+      const base=COMPANIES.find(c=>c.name===d.name);
+      if(!base)return null;
+      const ph=d.priceHistory&&d.priceHistory.length?d.priceHistory:genPriceHistory(base,d.buyPrice||base.price);
+      return {...base,capturedAt:d.capturedAt,sizeBonus:0,buyPrice:d.buyPrice||base.price,
+        curPrice:ph[ph.length-1],priceHistory:ph};
+    }).filter(Boolean);
+  }catch(e){caught=[];}
+  updateAssetHUD();
+}
+function resetProgress(){
+  if(!confirm('捕まえた記録をすべて消去します。よろしいですか？'))return;
+  try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+  caught=[];
+  playerAsset=START_ASSET;
+  updateAssetHUD();
+  selectedIdx=null;
+  document.getElementById('hud-count').textContent='0匹';
+  document.getElementById('nav-count').textContent='(0)';
+  spawnBeetles();
+  if(document.getElementById('cage-screen').classList.contains('active')){
+    document.getElementById('cage-detail').classList.remove('active');
+    renderCageScreen();
+  }
+  showMsg('記録をリセットしました（資産¥500,000）',2000);
+}
+window.resetProgress=resetProgress;
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+let gameStarted=false;
+
+// スタート画面のカブトムシを描画
+function drawStartBeetle(){
+  const cv=document.getElementById('start-beetle');
+  if(!cv)return;
+  const ctx=cv.getContext('2d');
+  let t=0;
+  function anim(){
+    if(gameStarted)return;
+    ctx.clearRect(0,0,140,120);
+    drawOneBeetle(ctx,70,60,52,'#8FC04C','#2C5F2D',0.7,1.3,false,0,t,false,-Math.PI/2);
+    t+=16;
+    requestAnimationFrame(anim);
+  }
+  anim();
+}
+
+function startGame(){
+  gameStarted=true;
+  document.getElementById('start-screen').classList.add('hide');
+  resizeField();
+  player.x=WORLD_W/2;player.y=WORLD_H/2;updateCamera();
+  loadProgress();          // 保存データを読み込む（資産も復元）
+  updateAssetHUD();
+  spawnBeetles();          // 捕獲済みを除いて出現
+  document.getElementById('hud-count').textContent=caught.length+'匹';
+  document.getElementById('nav-count').textContent=`(${caught.length})`;
+  requestAnimationFrame(loop);
+  setTimeout(()=>{const dh=document.getElementById('drag-hint');if(dh)dh.style.opacity='0';},5000);
+  showMsg('画面をなぞって移動！二本指でズーム。背後から忍び寄ってダブルタップ',5500);
+}
+
+// インラインonclickから呼べるよう公開
+window.switchScreen=switchScreen;
+window.resetProgress=resetProgress;
+window.openBroker=openBroker;
+window.releaseBeetle=releaseBeetle;
+window.selectBeetle=selectBeetle;
+
+window.addEventListener('load',()=>{
+  resizeField();
+  player.x=WORLD_W/2;player.y=WORLD_H/2;updateCamera();
+  drawStartBeetle();
+  document.getElementById('start-btn').addEventListener('click',startGame);
+});
+window.addEventListener('resize',()=>{resizeField();if(gameStarted)spawnBeetles();});
+</script>
+</body>
+</html>
