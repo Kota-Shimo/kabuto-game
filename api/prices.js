@@ -1,30 +1,31 @@
 // ============================================================
 // KabuMushi 株価取得サーバー（J-Quants API V2 / APIキー方式）
 // 配置場所: GitHubリポジトリの  api/prices.js
-// 役割: J-Quants V2から主要10銘柄の最新株価を取得してゲームに返す
 //
-// Vercelの環境変数に登録するもの（1つだけ）:
-//   JQUANTS_API_KEY … J-Quantsのダッシュボードで発行したAPIキー
+// 【レート制限対策】銘柄ごとに10回叩くのではなく、
+// 「ある営業日の全銘柄株価」を1回のリクエストで取得し、
+// その中から欲しい10銘柄を抜き出す方式。これで429を回避する。
 //
-// ※ 個人の検証用途。Freeプランのデータを第三者向けサービスに
-//    組み込んで公開する場合は利用規約の確認・商用契約が必要。
+// Vercelの環境変数（1つ）:
+//   JQUANTS_API_KEY … J-Quantsダッシュボードで発行したAPIキー
+//
+// ※ 個人の検証用途。第三者向けサービスへの組み込み公開は規約確認が必要。
 // ============================================================
 
-// 主要10銘柄（4桁コード）。V2でも5桁（末尾0付き）で問い合わせる
-const COMPANIES = [
-  { name: 'トヨタ',        code: '7203' },
-  { name: 'ソフトバンク',  code: '9984' },
-  { name: '三菱UFJ',       code: '8306' },
-  { name: '任天堂',        code: '7974' },
-  { name: 'キーエンス',    code: '6861' },
-  { name: 'ファーストリテ', code: '9983' },
-  { name: 'NTT',           code: '9432' },
-  { name: 'ホンダ',        code: '7267' },
-  { name: 'エーザイ',      code: '4523' },
-  { name: '楽天',          code: '4755' },
-];
+// 欲しい銘柄（5桁コード = 4桁+0）→ 表示名
+const WANT = {
+  '72030': 'トヨタ',
+  '99840': 'ソフトバンク',
+  '83060': '三菱UFJ',
+  '79740': '任天堂',
+  '68610': 'キーエンス',
+  '99830': 'ファーストリテ',
+  '94320': 'NTT',
+  '72670': 'ホンダ',
+  '45230': 'エーザイ',
+  '47550': '楽天',
+};
 
-// 日付を YYYY-MM-DD 形式にする
 function fmtDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -32,84 +33,78 @@ function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
-// 1銘柄の最新終値を取得（V2 / APIキー方式）
-// Freeプランは約12週間遅延なので、過去90〜120日の範囲を見る
-async function fetchLatestClose(code5, apiKey) {
-  const to = new Date();
-  to.setDate(to.getDate() - 84);     // 約12週間前
-  const from = new Date();
-  from.setDate(from.getDate() - 120); // さらに前から
-  const url = `https://api.jquants.com/v2/equities/bars/daily?code=${code5}&from=${fmtDate(from)}&to=${fmtDate(to)}`;
-
-  const res = await fetch(url, { headers: { 'x-api-key': apiKey } });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`株価取得失敗(${code5}): ${res.status} ${txt}`);
+// 指定日の「全銘柄」株価を1回で取得（ページネーション対応）
+async function fetchAllForDate(dateStr, apiKey) {
+  let url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}`;
+  const all = [];
+  for (let guard = 0; guard < 12; guard++) {
+    const res = await fetch(url, { headers: { 'x-api-key': apiKey } });
+    if (!res.ok) {
+      const txt = await res.text();
+      const err = new Error(`${res.status} ${txt}`);
+      err.status = res.status;
+      throw err;
+    }
+    const data = await res.json();
+    const quotes = data.daily_quotes || [];
+    all.push(...quotes);
+    if (data.pagination_key) {
+      url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}&pagination_key=${encodeURIComponent(data.pagination_key)}`;
+    } else {
+      break;
+    }
   }
-  const data = await res.json();
-  const quotes = data.daily_quotes;
-  if (!quotes || quotes.length === 0) return null;
-
-  // 新しい順にして、終値が入っている最新レコードを探す
-  quotes.reverse();
-  for (const q of quotes) {
-    const close = q.Close;
-    if (close !== undefined && close !== null) return Number(close);
-  }
-  return null;
+  return all;
 }
 
-// メイン処理（Vercelがこの関数を呼ぶ）
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=3600'); // 1時間サーバー側キャッシュ
-
-  // 指定ミリ秒待つ
+  res.setHeader('Cache-Control', 's-maxage=3600'); // 1時間キャッシュ
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   try {
     const apiKey = process.env.JQUANTS_API_KEY;
-    if (!apiKey) {
-      throw new Error('環境変数 JQUANTS_API_KEY が未設定です');
-    }
+    if (!apiKey) throw new Error('環境変数 JQUANTS_API_KEY が未設定です');
 
-    const results = {};
-    let firstError = null;
-    for (const c of COMPANIES) {
-      const code5 = c.code + '0'; // 4桁→5桁
+    // 無料プランは約12週間遅延。少し前の日付から、データが取れる営業日を探す
+    let quotes = null;
+    let usedDate = null;
+    let lastErr = null;
+    for (let back = 84; back <= 100; back++) {
+      const d = new Date();
+      d.setDate(d.getDate() - back);
+      const ds = fmtDate(d);
       try {
-        results[c.name] = await fetchLatestCloseWithRetry(code5, apiKey, sleep);
+        const arr = await fetchAllForDate(ds, apiKey);
+        if (arr && arr.length > 0) { quotes = arr; usedDate = ds; break; }
       } catch (e) {
-        results[c.name] = null;
-        if (!firstError) firstError = String(e.message || e);
+        lastErr = e;
+        if (e.status === 429) {
+          await sleep(2000);
+        }
       }
-      await sleep(350); // レート制限対策：次の銘柄まで0.35秒待つ
+      await sleep(300);
     }
 
-    res.status(200).json({
-      ok: true,
-      prices: results,
-      note: firstError ? ('一部取得に問題: ' + firstError) : undefined,
-      updated: new Date().toISOString(),
-    });
+    if (!quotes) {
+      throw new Error('株価データを取得できる営業日が見つかりませんでした' + (lastErr ? '（最後のエラー: ' + lastErr.message + '）' : ''));
+    }
+
+    // 全銘柄の中から欲しい10銘柄を抜き出す
+    const prices = {};
+    Object.values(WANT).forEach(n => prices[n] = null);
+    for (const q of quotes) {
+      const code = String(q.Code || q.code || '');
+      if (WANT[code]) {
+        const close = q.Close;
+        if (close !== undefined && close !== null) {
+          prices[WANT[code]] = Number(close);
+        }
+      }
+    }
+
+    res.status(200).json({ ok: true, prices, date: usedDate, updated: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) });
   }
-}
-
-// レート制限(429)が出たら少し待って最大3回まで再試行
-async function fetchLatestCloseWithRetry(code5, apiKey, sleep) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      return await fetchLatestClose(code5, apiKey);
-    } catch (e) {
-      const msg = String(e.message || e);
-      if (msg.includes('429') && attempt < 2) {
-        await sleep(1200); // 1.2秒待ってからリトライ
-        continue;
-      }
-      throw e;
-    }
-  }
-  return null;
 }
