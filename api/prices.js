@@ -64,6 +64,9 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=3600'); // 1時間サーバー側キャッシュ
 
+  // 指定ミリ秒待つ
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
   try {
     const apiKey = process.env.JQUANTS_API_KEY;
     if (!apiKey) {
@@ -75,11 +78,12 @@ export default async function handler(req, res) {
     for (const c of COMPANIES) {
       const code5 = c.code + '0'; // 4桁→5桁
       try {
-        results[c.name] = await fetchLatestClose(code5, apiKey);
+        results[c.name] = await fetchLatestCloseWithRetry(code5, apiKey, sleep);
       } catch (e) {
         results[c.name] = null;
         if (!firstError) firstError = String(e.message || e);
       }
+      await sleep(350); // レート制限対策：次の銘柄まで0.35秒待つ
     }
 
     res.status(200).json({
@@ -91,4 +95,21 @@ export default async function handler(req, res) {
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) });
   }
+}
+
+// レート制限(429)が出たら少し待って最大3回まで再試行
+async function fetchLatestCloseWithRetry(code5, apiKey, sleep) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fetchLatestClose(code5, apiKey);
+    } catch (e) {
+      const msg = String(e.message || e);
+      if (msg.includes('429') && attempt < 2) {
+        await sleep(1200); // 1.2秒待ってからリトライ
+        continue;
+      }
+      throw e;
+    }
+  }
+  return null;
 }
