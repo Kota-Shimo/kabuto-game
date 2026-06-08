@@ -1,100 +1,60 @@
 // ============================================================
-// KabuMushi 株価取得サーバー（J-Quants API V2 / APIキー方式）
-// 配置場所: GitHubリポジトリの  api/prices.js
-//
-// 【重要】Freeプランは「1分間に5リクエスト」しか叩けない。
-// さらに大幅超過すると5分ほど全遮断される。
-// そこで、APIを叩くのは原則【1回だけ】にする。
-//   - 日付指定で全銘柄を一括取得（公式推奨）
-//   - 営業日は「12週間前を起点に、土日なら金曜まで戻す」1回で確定
-//   - ページネーションが出た場合のみ追加取得（通常は出ない）
-//
-// Vercel環境変数（1つ）: JQUANTS_API_KEY
-// ※ 個人の検証用途。第三者向けサービス組み込み公開は規約確認が必要。
+// 【デバッグ専用】J-Quants V2 が実際に何を返すか生で確認する
+// 配置場所: api/prices.js （※確認後に本番版へ戻す）
 // ============================================================
-
-const WANT = {
-  '72030': 'トヨタ', '99840': 'ソフトバンク', '83060': '三菱UFJ',
-  '79740': '任天堂', '68610': 'キーエンス', '99830': 'ファーストリテ',
-  '94320': 'NTT', '72670': 'ホンダ', '45230': 'エーザイ', '47550': '楽天',
-};
-
-function fmtDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-// 約150日前を起点に、確実にデータがある平日を選ぶ。
-// 祝日は月曜に多いので、あえて「水曜日」に寄せる（祝日リスクが低い）。
-function pickBusinessDate() {
-  const d = new Date();
-  d.setDate(d.getDate() - 150);
-  // 直近の水曜まで戻す（曜日3=水）
-  const dow = d.getDay();
-  const diff = (dow - 3 + 7) % 7; // 水曜までの戻し日数
-  d.setDate(d.getDate() - diff);
-  return fmtDate(d);
-}
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=21600'); // 6時間キャッシュ（叩く回数を最小化）
+  res.setHeader('Cache-Control', 'no-store');
+
+  const apiKey = process.env.JQUANTS_API_KEY;
+  if (!apiKey) {
+    return res.status(200).json({ ok: false, error: 'JQUANTS_API_KEY未設定' });
+  }
+
+  // URLの ?date=YYYY-MM-DD や ?code=72030 で自由に試せるようにする
+  const q = req.query || {};
+  const date = q.date || '2026-01-07';
+  const code = q.code || null;
+
+  // codeがあればcode指定、なければdate指定
+  let url;
+  if (code) {
+    url = `https://api.jquants.com/v2/equities/bars/daily?code=${code}`;
+  } else {
+    url = `https://api.jquants.com/v2/equities/bars/daily?date=${date}`;
+  }
 
   try {
-    const apiKey = process.env.JQUANTS_API_KEY;
-    if (!apiKey) throw new Error('環境変数 JQUANTS_API_KEY が未設定です');
+    const r = await fetch(url, { headers: { 'x-api-key': apiKey } });
+    const status = r.status;
+    const text = await r.text();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch (e) {}
 
-    const dateStr = pickBusinessDate();
-
-    // ★APIを叩くのは基本1回だけ
-    let url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}`;
-    const all = [];
-    let pages = 0;
-    while (url && pages < 6) {
-      pages++;
-      const r = await fetch(url, { headers: { 'x-api-key': apiKey } });
-      if (!r.ok) {
-        const txt = await r.text();
-        // 429やその他はそのまま返して、状況を可視化
-        return res.status(200).json({
-          ok: false,
-          stage: 'fetch',
-          httpStatus: r.status,
-          date: dateStr,
-          error: txt,
-          hint: r.status === 429
-            ? 'Freeプランは1分5回まで。数分待ってから1回だけ開いてください。'
-            : undefined,
-        });
+    // レスポンスの「キー一覧」と「最初の1件」を見せる（中身を理解するため）
+    let topKeys = null, firstItem = null, arrayKey = null, arrayLen = null;
+    if (parsed && typeof parsed === 'object') {
+      topKeys = Object.keys(parsed);
+      // 配列が入っているキーを探す
+      for (const k of topKeys) {
+        if (Array.isArray(parsed[k])) {
+          arrayKey = k; arrayLen = parsed[k].length;
+          if (parsed[k].length > 0) firstItem = parsed[k][0];
+          break;
+        }
       }
-      const data = await r.json();
-      (data.daily_quotes || []).forEach(q => all.push(q));
-      if (data.pagination_key) {
-        url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}&pagination_key=${encodeURIComponent(data.pagination_key)}`;
-      } else {
-        url = null;
-      }
-    }
-
-    const prices = {};
-    Object.values(WANT).forEach(n => prices[n] = null);
-    let matched = 0;
-    for (const q of all) {
-      const code = String(q.Code || q.code || '');
-      if (WANT[code] && q.Close != null) { prices[WANT[code]] = Number(q.Close); matched++; }
     }
 
     res.status(200).json({
-      ok: true,
-      date: dateStr,
-      records: all.length,   // その日の全銘柄数（数千件のはず）
-      matched,               // 欲しい10社のうち取れた数
-      prices,
-      updated: new Date().toISOString(),
+      requestedUrl: url,
+      httpStatus: status,
+      topLevelKeys: topKeys,     // レスポンス直下のキー名（daily_quotesかどうか確認）
+      arrayKey,                  // 実際に配列が入っていたキー名
+      arrayLength: arrayLen,     // その件数
+      firstItem,                 // 最初の1件（項目名・値の確認）
+      rawHead: text.slice(0, 500), // 生テキストの先頭500文字
     });
   } catch (e) {
-    res.status(500).json({ ok: false, error: String(e.message || e) });
+    res.status(200).json({ ok: false, error: String(e.message || e) });
   }
 }
