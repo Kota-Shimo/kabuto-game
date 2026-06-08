@@ -1261,9 +1261,9 @@ const COMPANY_DESC={
   '楽天':'EC・金融・通信を手がけるIT企業',
 };
 function genPriceHistory(c,base){
-  base=base||c.price; const arr=[base];
-  for(let i=1;i<30;i++)arr.push(arr[i-1]*(1+(Math.random()-.48)*c.beta*.028));
-  return arr;
+  // テスト段階：買値で一定（変動させない）
+  base=base||c.price;
+  return new Array(30).fill(base);
 }
 
 // ══════════════════════════════════════════════
@@ -1455,15 +1455,7 @@ function switchScreen(name,btn){
 let selectedIdx=null,cageStates=[],cageRAF=null;
 
 function renderCageScreen(){
-  // 株価を少し変動させる（開くたびに動く＝相場の変化を体感）
-  caught.forEach(c=>{
-    const last=c.priceHistory[c.priceHistory.length-1];
-    const next=last*(1+(Math.random()-0.48)*c.beta*0.04);
-    c.priceHistory.push(Math.max(1,next));
-    if(c.priceHistory.length>40)c.priceHistory.shift();
-    c.curPrice=c.priceHistory[c.priceHistory.length-1];
-  });
-  if(caught.length)saveProgress();
+  // テスト段階：捕獲後は買値で固定（擬似的な値動きはしない）
   updatePortfolio();buildCageList();initCageCanvas();
 }
 function updatePortfolio(){
