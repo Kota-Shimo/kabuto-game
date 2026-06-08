@@ -1753,7 +1753,7 @@ async function startGame(){
 
   // 本物の株価を取得（失敗してもゲームは仮の値で動く）
   showMsg('最新の株価を取得中...',3000);
-  await loadRealPrices();
+  //await loadRealPrices();
 
   loadProgress();          // 保存データを読み込む（資産も復元）
   updateAssetHUD();
