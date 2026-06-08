@@ -1,5 +1,5 @@
 // ============================================================
-// KabuMushi 株価取得サーバー（J-Quants API V2 / APIキー方式）
+// KabutoMushi 株価取得サーバー（J-Quants API V2 / APIキー方式）
 // 配置場所: GitHubリポジトリの  api/prices.js
 //
 // V2の正しい仕様（実データで確認済み）:
