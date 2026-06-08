@@ -26,13 +26,15 @@ function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
-// 12週間前を起点に、土日なら直前の金曜へ戻して1営業日を決める
+// 約150日前を起点に、確実にデータがある平日を選ぶ。
+// 祝日は月曜に多いので、あえて「水曜日」に寄せる（祝日リスクが低い）。
 function pickBusinessDate() {
   const d = new Date();
-  d.setDate(d.getDate() - 90); // 約12.8週間前（遅延の安全圏）
-  const dow = d.getDay(); // 0=日,6=土
-  if (dow === 0) d.setDate(d.getDate() - 2); // 日→金
-  else if (dow === 6) d.setDate(d.getDate() - 1); // 土→金
+  d.setDate(d.getDate() - 150);
+  // 直近の水曜まで戻す（曜日3=水）
+  const dow = d.getDay();
+  const diff = (dow - 3 + 7) % 7; // 水曜までの戻し日数
+  d.setDate(d.getDate() - diff);
   return fmtDate(d);
 }
 
