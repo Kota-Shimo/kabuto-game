@@ -2,28 +2,21 @@
 // KabuMushi 株価取得サーバー（J-Quants API V2 / APIキー方式）
 // 配置場所: GitHubリポジトリの  api/prices.js
 //
-// 【レート制限対策】銘柄ごとに10回叩くのではなく、
-// 「ある営業日の全銘柄株価」を1回のリクエストで取得し、
-// その中から欲しい10銘柄を抜き出す方式。これで429を回避する。
+// 【重要】Freeプランは「1分間に5リクエスト」しか叩けない。
+// さらに大幅超過すると5分ほど全遮断される。
+// そこで、APIを叩くのは原則【1回だけ】にする。
+//   - 日付指定で全銘柄を一括取得（公式推奨）
+//   - 営業日は「12週間前を起点に、土日なら金曜まで戻す」1回で確定
+//   - ページネーションが出た場合のみ追加取得（通常は出ない）
 //
-// Vercelの環境変数（1つ）:
-//   JQUANTS_API_KEY … J-Quantsダッシュボードで発行したAPIキー
-//
-// ※ 個人の検証用途。第三者向けサービスへの組み込み公開は規約確認が必要。
+// Vercel環境変数（1つ）: JQUANTS_API_KEY
+// ※ 個人の検証用途。第三者向けサービス組み込み公開は規約確認が必要。
 // ============================================================
 
-// 欲しい銘柄（5桁コード = 4桁+0）→ 表示名
 const WANT = {
-  '72030': 'トヨタ',
-  '99840': 'ソフトバンク',
-  '83060': '三菱UFJ',
-  '79740': '任天堂',
-  '68610': 'キーエンス',
-  '99830': 'ファーストリテ',
-  '94320': 'NTT',
-  '72670': 'ホンダ',
-  '45230': 'エーザイ',
-  '47550': '楽天',
+  '72030': 'トヨタ', '99840': 'ソフトバンク', '83060': '三菱UFJ',
+  '79740': '任天堂', '68610': 'キーエンス', '99830': 'ファーストリテ',
+  '94320': 'NTT', '72670': 'ホンダ', '45230': 'エーザイ', '47550': '楽天',
 };
 
 function fmtDate(d) {
@@ -33,77 +26,72 @@ function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
-// 指定日の「全銘柄」株価を1回で取得（ページネーション対応）
-async function fetchAllForDate(dateStr, apiKey) {
-  let url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}`;
-  const all = [];
-  for (let guard = 0; guard < 12; guard++) {
-    const res = await fetch(url, { headers: { 'x-api-key': apiKey } });
-    if (!res.ok) {
-      const txt = await res.text();
-      const err = new Error(`${res.status} ${txt}`);
-      err.status = res.status;
-      throw err;
-    }
-    const data = await res.json();
-    const quotes = data.daily_quotes || [];
-    all.push(...quotes);
-    if (data.pagination_key) {
-      url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}&pagination_key=${encodeURIComponent(data.pagination_key)}`;
-    } else {
-      break;
-    }
-  }
-  return all;
+// 12週間前を起点に、土日なら直前の金曜へ戻して1営業日を決める
+function pickBusinessDate() {
+  const d = new Date();
+  d.setDate(d.getDate() - 90); // 約12.8週間前（遅延の安全圏）
+  const dow = d.getDay(); // 0=日,6=土
+  if (dow === 0) d.setDate(d.getDate() - 2); // 日→金
+  else if (dow === 6) d.setDate(d.getDate() - 1); // 土→金
+  return fmtDate(d);
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=3600'); // 1時間キャッシュ
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  res.setHeader('Cache-Control', 's-maxage=21600'); // 6時間キャッシュ（叩く回数を最小化）
 
   try {
     const apiKey = process.env.JQUANTS_API_KEY;
     if (!apiKey) throw new Error('環境変数 JQUANTS_API_KEY が未設定です');
 
-    // 無料プランは約12週間遅延。少し前の日付から、データが取れる営業日を探す
-    let quotes = null;
-    let usedDate = null;
-    let lastErr = null;
-    for (let back = 84; back <= 100; back++) {
-      const d = new Date();
-      d.setDate(d.getDate() - back);
-      const ds = fmtDate(d);
-      try {
-        const arr = await fetchAllForDate(ds, apiKey);
-        if (arr && arr.length > 0) { quotes = arr; usedDate = ds; break; }
-      } catch (e) {
-        lastErr = e;
-        if (e.status === 429) {
-          await sleep(2000);
-        }
+    const dateStr = pickBusinessDate();
+
+    // ★APIを叩くのは基本1回だけ
+    let url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}`;
+    const all = [];
+    let pages = 0;
+    while (url && pages < 6) {
+      pages++;
+      const r = await fetch(url, { headers: { 'x-api-key': apiKey } });
+      if (!r.ok) {
+        const txt = await r.text();
+        // 429やその他はそのまま返して、状況を可視化
+        return res.status(200).json({
+          ok: false,
+          stage: 'fetch',
+          httpStatus: r.status,
+          date: dateStr,
+          error: txt,
+          hint: r.status === 429
+            ? 'Freeプランは1分5回まで。数分待ってから1回だけ開いてください。'
+            : undefined,
+        });
       }
-      await sleep(300);
+      const data = await r.json();
+      (data.daily_quotes || []).forEach(q => all.push(q));
+      if (data.pagination_key) {
+        url = `https://api.jquants.com/v2/equities/bars/daily?date=${dateStr}&pagination_key=${encodeURIComponent(data.pagination_key)}`;
+      } else {
+        url = null;
+      }
     }
 
-    if (!quotes) {
-      throw new Error('株価データを取得できる営業日が見つかりませんでした' + (lastErr ? '（最後のエラー: ' + lastErr.message + '）' : ''));
-    }
-
-    // 全銘柄の中から欲しい10銘柄を抜き出す
     const prices = {};
     Object.values(WANT).forEach(n => prices[n] = null);
-    for (const q of quotes) {
+    let matched = 0;
+    for (const q of all) {
       const code = String(q.Code || q.code || '');
-      if (WANT[code]) {
-        const close = q.Close;
-        if (close !== undefined && close !== null) {
-          prices[WANT[code]] = Number(close);
-        }
-      }
+      if (WANT[code] && q.Close != null) { prices[WANT[code]] = Number(q.Close); matched++; }
     }
 
-    res.status(200).json({ ok: true, prices, date: usedDate, updated: new Date().toISOString() });
+    res.status(200).json({
+      ok: true,
+      date: dateStr,
+      records: all.length,   // その日の全銘柄数（数千件のはず）
+      matched,               // 欲しい10社のうち取れた数
+      prices,
+      updated: new Date().toISOString(),
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) });
   }
