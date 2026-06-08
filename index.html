@@ -1732,19 +1732,47 @@ function drawStartBeetle(){
   anim();
 }
 
-function startGame(){
+// ── サーバーから本物の株価を取得してCOMPANIESに反映 ──
+const PRICE_API = 'https://kabuto-game.vercel.app/api/prices';
+let realPriceLoaded = false;
+async function loadRealPrices(){
+  try{
+    const res = await fetch(PRICE_API);
+    if(!res.ok) return false;
+    const data = await res.json();
+    if(!data || !data.ok || !data.prices) return false;
+    let updated = 0;
+    COMPANIES.forEach(c=>{
+      const p = data.prices[c.name];
+      if(typeof p === 'number' && p > 0){ c.price = Math.round(p); updated++; }
+    });
+    realPriceLoaded = updated > 0;
+    return realPriceLoaded;
+  }catch(e){
+    return false; // 取れなければ仮の値のまま（ゲームは動く）
+  }
+}
+
+async function startGame(){
   gameStarted=true;
   document.getElementById('start-screen').classList.add('hide');
   resizeField();
   player.x=WORLD_W/2;player.y=WORLD_H/2;updateCamera();
+
+  // 本物の株価を取得（失敗してもゲームは仮の値で動く）
+  showMsg('最新の株価を取得中...',3000);
+  await loadRealPrices();
+
   loadProgress();          // 保存データを読み込む（資産も復元）
   updateAssetHUD();
-  spawnBeetles();          // 捕獲済みを除いて出現
+  spawnBeetles();          // 捕獲済みを除いて出現（更新後のpriceでサイズ等も決まる）
   document.getElementById('hud-count').textContent=caught.length+'匹';
   document.getElementById('nav-count').textContent=`(${caught.length})`;
   requestAnimationFrame(loop);
   setTimeout(()=>{const dh=document.getElementById('drag-hint');if(dh)dh.style.opacity='0';},5000);
-  showMsg('画面をなぞって移動！二本指でズーム。背後から忍び寄ってダブルタップ',5500);
+  showMsg(realPriceLoaded
+    ? '本物の株価で遊べます（約5ヶ月前のデータ）。背後から忍び寄ってダブルタップ！'
+    : '画面をなぞって移動！背後から忍び寄ってダブルタップ',5500);
 }
 
 // インラインonclickから呼べるよう公開
