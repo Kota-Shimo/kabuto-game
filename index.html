@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KabuMushi（カブトムシ株ゲーム）</title>
+<title>KabutoMushi（カブトムシ株ゲーム）</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;user-select:none;font-family:sans-serif;}
 html,body{width:100%;height:100%;background:#0a180a;overflow:hidden;}
@@ -92,7 +92,7 @@ canvas#cd-chart{width:100%;height:100%;}
 <!-- ══ スタート画面 ══ -->
 <div id="start-screen">
   <div id="start-inner">
-    <div id="start-title">KabuMushi</div>
+    <div id="start-title">KabutoMushi</div>
     <div id="start-sub">株を、カブトムシで集める。</div>
     <div id="start-tagline">財務指標が、生き物の姿になる</div>
     <div class="start-canvas-wrap"><canvas id="start-beetle" width="140" height="120"></canvas></div>
@@ -1658,7 +1658,7 @@ function openBroker(){
 // ══════════════════════════════════════════════
 // データ保存（localStorage）
 // ══════════════════════════════════════════════
-const SAVE_KEY='kabumushi_save_v2';
+const SAVE_KEY='kabutomushi_save_v2';
 function saveProgress(){
   try{
     const data={
